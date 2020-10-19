@@ -6,15 +6,25 @@
 //too much register pressure
 //#define NEW_SIMD_CODE
 
-#include "inc_vendor.cl"
-#include "inc_hash_constants.h"
-#include "inc_hash_functions.cl"
-#include "inc_types.cl"
+#ifdef KERNEL_STATIC
+#include "inc_vendor.h"
+#include "inc_types.h"
+#include "inc_platform.cl"
 #include "inc_common.cl"
 #include "inc_rp_optimized.h"
 #include "inc_rp_optimized.cl"
 #include "inc_simd.cl"
 #include "inc_hash_md5.cl"
+#endif
+
+typedef struct oldoffice01
+{
+  u32 version;
+  u32 encryptedVerifier[4];
+  u32 encryptedVerifierHash[4];
+  u32 rc4key[2];
+
+} oldoffice01_t;
 
 typedef struct
 {
@@ -24,7 +34,7 @@ typedef struct
 
 } RC4_KEY;
 
-DECLSPEC void swap (__local RC4_KEY *rc4_key, const u8 i, const u8 j)
+DECLSPEC void swap (LOCAL_AS RC4_KEY *rc4_key, const u8 i, const u8 j)
 {
   u8 tmp;
 
@@ -33,12 +43,12 @@ DECLSPEC void swap (__local RC4_KEY *rc4_key, const u8 i, const u8 j)
   rc4_key->S[j] = tmp;
 }
 
-DECLSPEC void rc4_init_16 (__local RC4_KEY *rc4_key, const u32 *data)
+DECLSPEC void rc4_init_16 (LOCAL_AS RC4_KEY *rc4_key, const u32 *data)
 {
   u32 v = 0x03020100;
   u32 a = 0x04040404;
 
-  __local u32 *ptr = (__local u32 *) rc4_key->S;
+  LOCAL_AS u32 *ptr = (LOCAL_AS u32 *) rc4_key->S;
 
   #ifdef _unroll
   #pragma unroll
@@ -86,7 +96,7 @@ DECLSPEC void rc4_init_16 (__local RC4_KEY *rc4_key, const u32 *data)
   }
 }
 
-DECLSPEC u8 rc4_next_16 (__local RC4_KEY *rc4_key, u8 i, u8 j, const u32 *in, u32 *out)
+DECLSPEC u8 rc4_next_16 (LOCAL_AS RC4_KEY *rc4_key, u8 i, u8 j, const u32 *in, u32 *out)
 {
   #ifdef _unroll
   #pragma unroll
@@ -139,7 +149,7 @@ DECLSPEC u8 rc4_next_16 (__local RC4_KEY *rc4_key, u8 i, u8 j, const u32 *in, u3
   return j;
 }
 
-__kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m09710_m04 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
+KERNEL_FQ void m09710_m04 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
 {
   /**
    * modifier
@@ -173,22 +183,20 @@ __kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m09710_m04 (KERN_A
    * shared
    */
 
-  __local RC4_KEY rc4_keys[64];
+  LOCAL_VK RC4_KEY rc4_keys[64];
 
-  __local RC4_KEY *rc4_key = &rc4_keys[lid];
+  LOCAL_AS RC4_KEY *rc4_key = &rc4_keys[lid];
 
   /**
    * esalt
    */
 
-  const u32 version = esalt_bufs[digests_offset].version;
-
   u32 encryptedVerifier[4];
 
-  encryptedVerifier[0] = esalt_bufs[digests_offset].encryptedVerifier[0];
-  encryptedVerifier[1] = esalt_bufs[digests_offset].encryptedVerifier[1];
-  encryptedVerifier[2] = esalt_bufs[digests_offset].encryptedVerifier[2];
-  encryptedVerifier[3] = esalt_bufs[digests_offset].encryptedVerifier[3];
+  encryptedVerifier[0] = esalt_bufs[DIGESTS_OFFSET].encryptedVerifier[0];
+  encryptedVerifier[1] = esalt_bufs[DIGESTS_OFFSET].encryptedVerifier[1];
+  encryptedVerifier[2] = esalt_bufs[DIGESTS_OFFSET].encryptedVerifier[2];
+  encryptedVerifier[3] = esalt_bufs[DIGESTS_OFFSET].encryptedVerifier[3];
 
   /**
    * loop
@@ -201,7 +209,7 @@ __kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m09710_m04 (KERN_A
     u32x w2[4] = { 0 };
     u32x w3[4] = { 0 };
 
-    apply_rules_vect (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
+    apply_rules_vect_optimized (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
 
     /**
      * md5
@@ -271,15 +279,15 @@ __kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m09710_m04 (KERN_A
   }
 }
 
-__kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m09710_m08 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
+KERNEL_FQ void m09710_m08 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
 {
 }
 
-__kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m09710_m16 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
+KERNEL_FQ void m09710_m16 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
 {
 }
 
-__kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m09710_s04 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
+KERNEL_FQ void m09710_s04 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
 {
   /**
    * modifier
@@ -313,22 +321,20 @@ __kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m09710_s04 (KERN_A
    * shared
    */
 
-  __local RC4_KEY rc4_keys[64];
+  LOCAL_VK RC4_KEY rc4_keys[64];
 
-  __local RC4_KEY *rc4_key = &rc4_keys[lid];
+  LOCAL_AS RC4_KEY *rc4_key = &rc4_keys[lid];
 
   /**
    * esalt
    */
 
-  const u32 version = esalt_bufs[digests_offset].version;
-
   u32 encryptedVerifier[4];
 
-  encryptedVerifier[0] = esalt_bufs[digests_offset].encryptedVerifier[0];
-  encryptedVerifier[1] = esalt_bufs[digests_offset].encryptedVerifier[1];
-  encryptedVerifier[2] = esalt_bufs[digests_offset].encryptedVerifier[2];
-  encryptedVerifier[3] = esalt_bufs[digests_offset].encryptedVerifier[3];
+  encryptedVerifier[0] = esalt_bufs[DIGESTS_OFFSET].encryptedVerifier[0];
+  encryptedVerifier[1] = esalt_bufs[DIGESTS_OFFSET].encryptedVerifier[1];
+  encryptedVerifier[2] = esalt_bufs[DIGESTS_OFFSET].encryptedVerifier[2];
+  encryptedVerifier[3] = esalt_bufs[DIGESTS_OFFSET].encryptedVerifier[3];
 
   /**
    * digest
@@ -336,10 +342,10 @@ __kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m09710_s04 (KERN_A
 
   const u32 search[4] =
   {
-    digests_buf[digests_offset].digest_buf[DGST_R0],
-    digests_buf[digests_offset].digest_buf[DGST_R1],
-    digests_buf[digests_offset].digest_buf[DGST_R2],
-    digests_buf[digests_offset].digest_buf[DGST_R3]
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R0],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R1],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R2],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R3]
   };
 
   /**
@@ -353,7 +359,7 @@ __kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m09710_s04 (KERN_A
     u32x w2[4] = { 0 };
     u32x w3[4] = { 0 };
 
-    apply_rules_vect (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
+    apply_rules_vect_optimized (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
 
     /**
      * md5
@@ -423,10 +429,10 @@ __kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m09710_s04 (KERN_A
   }
 }
 
-__kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m09710_s08 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
+KERNEL_FQ void m09710_s08 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
 {
 }
 
-__kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m09710_s16 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
+KERNEL_FQ void m09710_s16 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
 {
 }

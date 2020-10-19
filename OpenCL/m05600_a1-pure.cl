@@ -5,16 +5,29 @@
 
 //#define NEW_SIMD_CODE
 
-#include "inc_vendor.cl"
-#include "inc_hash_constants.h"
-#include "inc_hash_functions.cl"
-#include "inc_types.cl"
+#ifdef KERNEL_STATIC
+#include "inc_vendor.h"
+#include "inc_types.h"
+#include "inc_platform.cl"
 #include "inc_common.cl"
 #include "inc_scalar.cl"
 #include "inc_hash_md4.cl"
 #include "inc_hash_md5.cl"
+#endif
 
-__kernel void m05600_mxx (KERN_ATTR_ESALT (netntlm_t))
+typedef struct netntlm
+{
+  u32 user_len;
+  u32 domain_len;
+  u32 srvchall_len;
+  u32 clichall_len;
+
+  u32 userdomain_buf[64];
+  u32 chall_buf[256];
+
+} netntlm_t;
+
+KERNEL_FQ void m05600_mxx (KERN_ATTR_ESALT (netntlm_t))
 {
   /**
    * modifier
@@ -33,7 +46,7 @@ __kernel void m05600_mxx (KERN_ATTR_ESALT (netntlm_t))
 
   md4_init (&ctx10);
 
-  md4_update_global_utf16le (&ctx10, pws[gid].i, pws[gid].pw_len & 255);
+  md4_update_global_utf16le (&ctx10, pws[gid].i, pws[gid].pw_len);
 
   /**
    * loop
@@ -43,7 +56,7 @@ __kernel void m05600_mxx (KERN_ATTR_ESALT (netntlm_t))
   {
     md4_ctx_t ctx1 = ctx10;
 
-    md4_update_global_utf16le (&ctx1, combs_buf[il_pos].i, combs_buf[il_pos].pw_len & 255);
+    md4_update_global_utf16le (&ctx1, combs_buf[il_pos].i, combs_buf[il_pos].pw_len);
 
     md4_final (&ctx1);
 
@@ -73,7 +86,7 @@ __kernel void m05600_mxx (KERN_ATTR_ESALT (netntlm_t))
 
     md5_hmac_init_64 (&ctx0, w0, w1, w2, w3);
 
-    md5_hmac_update_global (&ctx0, esalt_bufs[digests_offset].userdomain_buf, esalt_bufs[digests_offset].user_len + esalt_bufs[digests_offset].domain_len);
+    md5_hmac_update_global (&ctx0, esalt_bufs[DIGESTS_OFFSET].userdomain_buf, esalt_bufs[DIGESTS_OFFSET].user_len + esalt_bufs[DIGESTS_OFFSET].domain_len);
 
     md5_hmac_final (&ctx0);
 
@@ -98,7 +111,7 @@ __kernel void m05600_mxx (KERN_ATTR_ESALT (netntlm_t))
 
     md5_hmac_init_64 (&ctx, w0, w1, w2, w3);
 
-    md5_hmac_update_global (&ctx, esalt_bufs[digests_offset].chall_buf, esalt_bufs[digests_offset].srvchall_len + esalt_bufs[digests_offset].clichall_len);
+    md5_hmac_update_global (&ctx, esalt_bufs[DIGESTS_OFFSET].chall_buf, esalt_bufs[DIGESTS_OFFSET].srvchall_len + esalt_bufs[DIGESTS_OFFSET].clichall_len);
 
     md5_hmac_final (&ctx);
 
@@ -111,7 +124,7 @@ __kernel void m05600_mxx (KERN_ATTR_ESALT (netntlm_t))
   }
 }
 
-__kernel void m05600_sxx (KERN_ATTR_ESALT (netntlm_t))
+KERNEL_FQ void m05600_sxx (KERN_ATTR_ESALT (netntlm_t))
 {
   /**
    * modifier
@@ -128,10 +141,10 @@ __kernel void m05600_sxx (KERN_ATTR_ESALT (netntlm_t))
 
   const u32 search[4] =
   {
-    digests_buf[digests_offset].digest_buf[DGST_R0],
-    digests_buf[digests_offset].digest_buf[DGST_R1],
-    digests_buf[digests_offset].digest_buf[DGST_R2],
-    digests_buf[digests_offset].digest_buf[DGST_R3]
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R0],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R1],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R2],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R3]
   };
 
   /**
@@ -142,7 +155,7 @@ __kernel void m05600_sxx (KERN_ATTR_ESALT (netntlm_t))
 
   md4_init (&ctx10);
 
-  md4_update_global_utf16le (&ctx10, pws[gid].i, pws[gid].pw_len & 255);
+  md4_update_global_utf16le (&ctx10, pws[gid].i, pws[gid].pw_len);
 
   /**
    * loop
@@ -152,7 +165,7 @@ __kernel void m05600_sxx (KERN_ATTR_ESALT (netntlm_t))
   {
     md4_ctx_t ctx1 = ctx10;
 
-    md4_update_global_utf16le (&ctx1, combs_buf[il_pos].i, combs_buf[il_pos].pw_len & 255);
+    md4_update_global_utf16le (&ctx1, combs_buf[il_pos].i, combs_buf[il_pos].pw_len);
 
     md4_final (&ctx1);
 
@@ -182,7 +195,7 @@ __kernel void m05600_sxx (KERN_ATTR_ESALT (netntlm_t))
 
     md5_hmac_init_64 (&ctx0, w0, w1, w2, w3);
 
-    md5_hmac_update_global (&ctx0, esalt_bufs[digests_offset].userdomain_buf, esalt_bufs[digests_offset].user_len + esalt_bufs[digests_offset].domain_len);
+    md5_hmac_update_global (&ctx0, esalt_bufs[DIGESTS_OFFSET].userdomain_buf, esalt_bufs[DIGESTS_OFFSET].user_len + esalt_bufs[DIGESTS_OFFSET].domain_len);
 
     md5_hmac_final (&ctx0);
 
@@ -207,7 +220,7 @@ __kernel void m05600_sxx (KERN_ATTR_ESALT (netntlm_t))
 
     md5_hmac_init_64 (&ctx, w0, w1, w2, w3);
 
-    md5_hmac_update_global (&ctx, esalt_bufs[digests_offset].chall_buf, esalt_bufs[digests_offset].srvchall_len + esalt_bufs[digests_offset].clichall_len);
+    md5_hmac_update_global (&ctx, esalt_bufs[DIGESTS_OFFSET].chall_buf, esalt_bufs[DIGESTS_OFFSET].srvchall_len + esalt_bufs[DIGESTS_OFFSET].clichall_len);
 
     md5_hmac_final (&ctx);
 

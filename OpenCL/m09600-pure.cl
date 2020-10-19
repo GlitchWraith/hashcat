@@ -5,19 +5,33 @@
 
 #define NEW_SIMD_CODE
 
-#include "inc_vendor.cl"
-#include "inc_hash_constants.h"
-#include "inc_hash_functions.cl"
-#include "inc_types.cl"
+#ifdef KERNEL_STATIC
+#include "inc_vendor.h"
+#include "inc_types.h"
+#include "inc_platform.cl"
 #include "inc_common.cl"
 #include "inc_simd.cl"
 #include "inc_hash_sha512.cl"
 #include "inc_cipher_aes.cl"
+#endif
 
 #define COMPARE_S "inc_comp_single.cl"
 #define COMPARE_M "inc_comp_multi.cl"
 
-__kernel void m09600_init (KERN_ATTR_TMPS_ESALT (office2013_tmp_t, office2013_t))
+typedef struct office2013_tmp
+{
+  u64  out[8];
+
+} office2013_tmp_t;
+
+typedef struct office2013
+{
+  u32 encryptedVerifier[4];
+  u32 encryptedVerifierHash[8];
+
+} office2013_t;
+
+KERNEL_FQ void m09600_init (KERN_ATTR_TMPS_ESALT (office2013_tmp_t, office2013_t))
 {
   /**
    * base
@@ -31,9 +45,9 @@ __kernel void m09600_init (KERN_ATTR_TMPS_ESALT (office2013_tmp_t, office2013_t)
 
   sha512_init (&ctx);
 
-  sha512_update_global (&ctx, salt_bufs[salt_pos].salt_buf, salt_bufs[salt_pos].salt_len);
+  sha512_update_global (&ctx, salt_bufs[SALT_POS].salt_buf, salt_bufs[SALT_POS].salt_len);
 
-  sha512_update_global_utf16le_swap (&ctx, pws[gid].i, pws[gid].pw_len & 255);
+  sha512_update_global_utf16le_swap (&ctx, pws[gid].i, pws[gid].pw_len);
 
   sha512_final (&ctx);
 
@@ -47,7 +61,7 @@ __kernel void m09600_init (KERN_ATTR_TMPS_ESALT (office2013_tmp_t, office2013_t)
   tmps[gid].out[7] = ctx.h[7];
 }
 
-__kernel void m09600_loop (KERN_ATTR_TMPS_ESALT (office2013_tmp_t, office2013_t))
+KERNEL_FQ void m09600_loop (KERN_ATTR_TMPS_ESALT (office2013_tmp_t, office2013_t))
 {
   const u64 gid = get_global_id (0);
 
@@ -106,7 +120,7 @@ __kernel void m09600_loop (KERN_ATTR_TMPS_ESALT (office2013_tmp_t, office2013_t)
 
   for (u32 i = 0, j = loop_pos; i < loop_cnt; i++, j++)
   {
-    w0[0] = swap32 (j);
+    w0[0] = hc_swap32 (j);
     w0[1] = h32_from_64 (t0);
     w0[2] = l32_from_64 (t0);
     w0[3] = h32_from_64 (t1);
@@ -157,7 +171,7 @@ __kernel void m09600_loop (KERN_ATTR_TMPS_ESALT (office2013_tmp_t, office2013_t)
   unpack64v (tmps, out, gid, 7, t7);
 }
 
-__kernel void m09600_comp (KERN_ATTR_TMPS_ESALT (office2013_tmp_t, office2013_t))
+KERNEL_FQ void m09600_comp (KERN_ATTR_TMPS_ESALT (office2013_tmp_t, office2013_t))
 {
   const u64 gid = get_global_id (0);
   const u64 lid = get_local_id (0);
@@ -169,19 +183,19 @@ __kernel void m09600_comp (KERN_ATTR_TMPS_ESALT (office2013_tmp_t, office2013_t)
 
   #ifdef REAL_SHM
 
-  __local u32 s_td0[256];
-  __local u32 s_td1[256];
-  __local u32 s_td2[256];
-  __local u32 s_td3[256];
-  __local u32 s_td4[256];
+  LOCAL_VK u32 s_td0[256];
+  LOCAL_VK u32 s_td1[256];
+  LOCAL_VK u32 s_td2[256];
+  LOCAL_VK u32 s_td3[256];
+  LOCAL_VK u32 s_td4[256];
 
-  __local u32 s_te0[256];
-  __local u32 s_te1[256];
-  __local u32 s_te2[256];
-  __local u32 s_te3[256];
-  __local u32 s_te4[256];
+  LOCAL_VK u32 s_te0[256];
+  LOCAL_VK u32 s_te1[256];
+  LOCAL_VK u32 s_te2[256];
+  LOCAL_VK u32 s_te3[256];
+  LOCAL_VK u32 s_te4[256];
 
-  for (MAYBE_VOLATILE u32 i = lid; i < 256; i += lsz)
+  for (u32 i = lid; i < 256; i += lsz)
   {
     s_td0[i] = td0[i];
     s_td1[i] = td1[i];
@@ -196,21 +210,21 @@ __kernel void m09600_comp (KERN_ATTR_TMPS_ESALT (office2013_tmp_t, office2013_t)
     s_te4[i] = te4[i];
   }
 
-  barrier (CLK_LOCAL_MEM_FENCE);
+  SYNC_THREADS ();
 
   #else
 
-  __constant u32a *s_td0 = td0;
-  __constant u32a *s_td1 = td1;
-  __constant u32a *s_td2 = td2;
-  __constant u32a *s_td3 = td3;
-  __constant u32a *s_td4 = td4;
+  CONSTANT_AS u32a *s_td0 = td0;
+  CONSTANT_AS u32a *s_td1 = td1;
+  CONSTANT_AS u32a *s_td2 = td2;
+  CONSTANT_AS u32a *s_td3 = td3;
+  CONSTANT_AS u32a *s_td4 = td4;
 
-  __constant u32a *s_te0 = te0;
-  __constant u32a *s_te1 = te1;
-  __constant u32a *s_te2 = te2;
-  __constant u32a *s_te3 = te3;
-  __constant u32a *s_te4 = te4;
+  CONSTANT_AS u32a *s_te0 = te0;
+  CONSTANT_AS u32a *s_te1 = te1;
+  CONSTANT_AS u32a *s_te2 = te2;
+  CONSTANT_AS u32a *s_te3 = te3;
+  CONSTANT_AS u32a *s_te4 = te4;
 
   #endif
 
@@ -352,9 +366,9 @@ __kernel void m09600_comp (KERN_ATTR_TMPS_ESALT (office2013_tmp_t, office2013_t)
 
   u32 ks[60];
 
-  AES256_set_decrypt_key (ks, ukey, s_te0, s_te1, s_te2, s_te3, s_te4, s_td0, s_td1, s_td2, s_td3, s_td4);
+  AES256_set_decrypt_key (ks, ukey, s_te0, s_te1, s_te2, s_te3, s_td0, s_td1, s_td2, s_td3);
 
-  const u32 digest_cur = digests_offset + loop_pos;
+  const u32 digest_cur = DIGESTS_OFFSET + loop_pos;
 
   u32 data[4];
 
@@ -367,10 +381,10 @@ __kernel void m09600_comp (KERN_ATTR_TMPS_ESALT (office2013_tmp_t, office2013_t)
 
   AES256_decrypt (ks, data, out, s_td0, s_td1, s_td2, s_td3, s_td4);
 
-  out[0] ^= salt_bufs[salt_pos].salt_buf[0];
-  out[1] ^= salt_bufs[salt_pos].salt_buf[1];
-  out[2] ^= salt_bufs[salt_pos].salt_buf[2];
-  out[3] ^= salt_bufs[salt_pos].salt_buf[3];
+  out[0] ^= salt_bufs[SALT_POS].salt_buf[0];
+  out[1] ^= salt_bufs[SALT_POS].salt_buf[1];
+  out[2] ^= salt_bufs[SALT_POS].salt_buf[2];
+  out[3] ^= salt_bufs[SALT_POS].salt_buf[3];
 
   //  do a sha512 of the result
 
@@ -431,12 +445,12 @@ __kernel void m09600_comp (KERN_ATTR_TMPS_ESALT (office2013_tmp_t, office2013_t)
   ukey[6] = h32_from_64_S (digest1[3]);
   ukey[7] = l32_from_64_S (digest1[3]);
 
-  AES256_set_encrypt_key (ks, ukey, s_te0, s_te1, s_te2, s_te3, s_te4);
+  AES256_set_encrypt_key (ks, ukey, s_te0, s_te1, s_te2, s_te3);
 
-  data[0] = h32_from_64_S (digest[0]) ^ salt_bufs[salt_pos].salt_buf[0];
-  data[1] = l32_from_64_S (digest[0]) ^ salt_bufs[salt_pos].salt_buf[1];
-  data[2] = h32_from_64_S (digest[1]) ^ salt_bufs[salt_pos].salt_buf[2];
-  data[3] = l32_from_64_S (digest[1]) ^ salt_bufs[salt_pos].salt_buf[3];
+  data[0] = h32_from_64_S (digest[0]) ^ salt_bufs[SALT_POS].salt_buf[0];
+  data[1] = l32_from_64_S (digest[0]) ^ salt_bufs[SALT_POS].salt_buf[1];
+  data[2] = h32_from_64_S (digest[1]) ^ salt_bufs[SALT_POS].salt_buf[2];
+  data[3] = l32_from_64_S (digest[1]) ^ salt_bufs[SALT_POS].salt_buf[3];
 
   AES256_encrypt (ks, data, out, s_te0, s_te1, s_te2, s_te3, s_te4);
 
@@ -447,5 +461,7 @@ __kernel void m09600_comp (KERN_ATTR_TMPS_ESALT (office2013_tmp_t, office2013_t)
 
   #define il_pos 0
 
+  #ifdef KERNEL_STATIC
   #include COMPARE_M
+  #endif
 }

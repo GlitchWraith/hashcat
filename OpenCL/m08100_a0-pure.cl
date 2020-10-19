@@ -5,17 +5,18 @@
 
 //#define NEW_SIMD_CODE
 
-#include "inc_vendor.cl"
-#include "inc_hash_constants.h"
-#include "inc_hash_functions.cl"
-#include "inc_types.cl"
+#ifdef KERNEL_STATIC
+#include "inc_vendor.h"
+#include "inc_types.h"
+#include "inc_platform.cl"
 #include "inc_common.cl"
 #include "inc_rp.h"
 #include "inc_rp.cl"
 #include "inc_scalar.cl"
 #include "inc_hash_sha1.cl"
+#endif
 
-__kernel void m08100_mxx (KERN_ATTR_RULES ())
+KERNEL_FQ void m08100_mxx (KERN_ATTR_RULES ())
 {
   /**
    * modifier
@@ -30,13 +31,15 @@ __kernel void m08100_mxx (KERN_ATTR_RULES ())
    * base
    */
 
+  u32 z[16] = { 0 };
+
   COPY_PW (pws[gid]);
 
   sha1_ctx_t ctx0;
 
   sha1_init (&ctx0);
 
-  sha1_update_global (&ctx0, salt_bufs[salt_pos].salt_buf, salt_bufs[salt_pos].salt_len);
+  sha1_update_global (&ctx0, salt_bufs[SALT_POS].salt_buf, salt_bufs[SALT_POS].salt_len);
 
   /**
    * loop
@@ -50,7 +53,9 @@ __kernel void m08100_mxx (KERN_ATTR_RULES ())
 
     sha1_ctx_t ctx = ctx0;
 
-    sha1_update_swap (&ctx, tmp.i, tmp.pw_len + 1);
+    sha1_update_swap (&ctx, tmp.i, tmp.pw_len);
+
+    sha1_update (&ctx, z, 1);
 
     sha1_final (&ctx);
 
@@ -63,7 +68,7 @@ __kernel void m08100_mxx (KERN_ATTR_RULES ())
   }
 }
 
-__kernel void m08100_sxx (KERN_ATTR_RULES ())
+KERNEL_FQ void m08100_sxx (KERN_ATTR_RULES ())
 {
   /**
    * modifier
@@ -80,15 +85,17 @@ __kernel void m08100_sxx (KERN_ATTR_RULES ())
 
   const u32 search[4] =
   {
-    digests_buf[digests_offset].digest_buf[DGST_R0],
-    digests_buf[digests_offset].digest_buf[DGST_R1],
-    digests_buf[digests_offset].digest_buf[DGST_R2],
-    digests_buf[digests_offset].digest_buf[DGST_R3]
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R0],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R1],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R2],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R3]
   };
 
   /**
    * base
    */
+
+  u32 z[16] = { 0 };
 
   COPY_PW (pws[gid]);
 
@@ -96,7 +103,7 @@ __kernel void m08100_sxx (KERN_ATTR_RULES ())
 
   sha1_init (&ctx0);
 
-  sha1_update_global (&ctx0, salt_bufs[salt_pos].salt_buf, salt_bufs[salt_pos].salt_len);
+  sha1_update_global (&ctx0, salt_bufs[SALT_POS].salt_buf, salt_bufs[SALT_POS].salt_len);
 
   /**
    * loop
@@ -110,7 +117,9 @@ __kernel void m08100_sxx (KERN_ATTR_RULES ())
 
     sha1_ctx_t ctx = ctx0;
 
-    sha1_update_swap (&ctx, tmp.i, tmp.pw_len + 1);
+    sha1_update_swap (&ctx, tmp.i, tmp.pw_len);
+
+    sha1_update (&ctx, z, 1);
 
     sha1_final (&ctx);
 

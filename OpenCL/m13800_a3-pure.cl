@@ -5,15 +5,22 @@
 
 #define NEW_SIMD_CODE
 
-#include "inc_vendor.cl"
-#include "inc_hash_constants.h"
-#include "inc_hash_functions.cl"
-#include "inc_types.cl"
+#ifdef KERNEL_STATIC
+#include "inc_vendor.h"
+#include "inc_types.h"
+#include "inc_platform.cl"
 #include "inc_common.cl"
 #include "inc_simd.cl"
 #include "inc_hash_sha256.cl"
+#endif
 
-__kernel void m13800_mxx (KERN_ATTR_VECTOR_ESALT (win8phone_t))
+typedef struct win8phone
+{
+  u32 salt_buf[32];
+
+} win8phone_t;
+
+KERNEL_FQ void m13800_mxx (KERN_ATTR_VECTOR_ESALT (win8phone_t))
 {
   /**
    * modifier
@@ -28,11 +35,11 @@ __kernel void m13800_mxx (KERN_ATTR_VECTOR_ESALT (win8phone_t))
    * base
    */
 
-  const u32 pw_len = pws[gid].pw_len & 255;
+  const u32 pw_len = pws[gid].pw_len;
 
   u32x w[64] = { 0 };
 
-  for (int i = 0, idx = 0; i < pw_len; i += 4, idx += 1)
+  for (u32 i = 0, idx = 0; i < pw_len; i += 4, idx += 1)
   {
     w[idx] = pws[gid].i[idx];
   }
@@ -41,9 +48,9 @@ __kernel void m13800_mxx (KERN_ATTR_VECTOR_ESALT (win8phone_t))
 
   u32x s[32];
 
-  for (int i = 0, idx = 0; i < salt_len; i += 4, idx += 1)
+  for (u32 i = 0, idx = 0; i < salt_len; i += 4, idx += 1)
   {
-    s[idx] = esalt_bufs[digests_offset].salt_buf[idx];
+    s[idx] = esalt_bufs[DIGESTS_OFFSET].salt_buf[idx];
   }
 
   /**
@@ -79,7 +86,7 @@ __kernel void m13800_mxx (KERN_ATTR_VECTOR_ESALT (win8phone_t))
   }
 }
 
-__kernel void m13800_sxx (KERN_ATTR_VECTOR_ESALT (win8phone_t))
+KERNEL_FQ void m13800_sxx (KERN_ATTR_VECTOR_ESALT (win8phone_t))
 {
   /**
    * modifier
@@ -96,21 +103,21 @@ __kernel void m13800_sxx (KERN_ATTR_VECTOR_ESALT (win8phone_t))
 
   const u32 search[4] =
   {
-    digests_buf[digests_offset].digest_buf[DGST_R0],
-    digests_buf[digests_offset].digest_buf[DGST_R1],
-    digests_buf[digests_offset].digest_buf[DGST_R2],
-    digests_buf[digests_offset].digest_buf[DGST_R3]
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R0],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R1],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R2],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R3]
   };
 
   /**
    * base
    */
 
-  const u32 pw_len = pws[gid].pw_len & 255;
+  const u32 pw_len = pws[gid].pw_len;
 
   u32x w[64] = { 0 };
 
-  for (int i = 0, idx = 0; i < pw_len; i += 4, idx += 1)
+  for (u32 i = 0, idx = 0; i < pw_len; i += 4, idx += 1)
   {
     w[idx] = pws[gid].i[idx];
   }
@@ -119,9 +126,9 @@ __kernel void m13800_sxx (KERN_ATTR_VECTOR_ESALT (win8phone_t))
 
   u32x s[32];
 
-  for (int i = 0, idx = 0; i < salt_len; i += 4, idx += 1)
+  for (u32 i = 0, idx = 0; i < salt_len; i += 4, idx += 1)
   {
-    s[idx] = esalt_bufs[digests_offset].salt_buf[idx];
+    s[idx] = esalt_bufs[DIGESTS_OFFSET].salt_buf[idx];
   }
 
   /**

@@ -5,27 +5,43 @@
 
 #define NEW_SIMD_CODE
 
-#include "inc_vendor.cl"
-#include "inc_hash_constants.h"
-#include "inc_hash_functions.cl"
-#include "inc_types.cl"
+#ifdef KERNEL_STATIC
+#include "inc_vendor.h"
+#include "inc_types.h"
+#include "inc_platform.cl"
 #include "inc_common.cl"
 #include "inc_simd.cl"
 #include "inc_hash_sha256.cl"
+#endif
+
+typedef struct pbkdf2_sha256_tmp
+{
+  u32  ipad[8];
+  u32  opad[8];
+
+  u32  dgst[32];
+  u32  out[32];
+
+} pbkdf2_sha256_tmp_t;
+
+typedef struct ethereum_pbkdf2
+{
+  u32 salt_buf[16];
+  u32 ciphertext[8];
+
+} ethereum_pbkdf2_t;
 
 #define COMPARE_S "inc_comp_single.cl"
 #define COMPARE_M "inc_comp_multi.cl"
 
-__constant u64a keccakf_rndc[24] =
+CONSTANT_VK u64a keccakf_rndc[24] =
 {
-  0x0000000000000001, 0x0000000000008082, 0x800000000000808a,
-  0x8000000080008000, 0x000000000000808b, 0x0000000080000001,
-  0x8000000080008081, 0x8000000000008009, 0x000000000000008a,
-  0x0000000000000088, 0x0000000080008009, 0x000000008000000a,
-  0x000000008000808b, 0x800000000000008b, 0x8000000000008089,
-  0x8000000000008003, 0x8000000000008002, 0x8000000000000080,
-  0x000000000000800a, 0x800000008000000a, 0x8000000080008081,
-  0x8000000000008080, 0x0000000080000001, 0x8000000080008008
+  KECCAK_RNDC_00, KECCAK_RNDC_01, KECCAK_RNDC_02, KECCAK_RNDC_03,
+  KECCAK_RNDC_04, KECCAK_RNDC_05, KECCAK_RNDC_06, KECCAK_RNDC_07,
+  KECCAK_RNDC_08, KECCAK_RNDC_09, KECCAK_RNDC_10, KECCAK_RNDC_11,
+  KECCAK_RNDC_12, KECCAK_RNDC_13, KECCAK_RNDC_14, KECCAK_RNDC_15,
+  KECCAK_RNDC_16, KECCAK_RNDC_17, KECCAK_RNDC_18, KECCAK_RNDC_19,
+  KECCAK_RNDC_20, KECCAK_RNDC_21, KECCAK_RNDC_22, KECCAK_RNDC_23
 };
 
 #ifndef KECCAK_ROUNDS
@@ -48,7 +64,7 @@ __constant u64a keccakf_rndc[24] =
   u32 j = keccakf_piln[s];      \
   u32 k = keccakf_rotc[s];      \
   bc0 = st[j];                  \
-  st[j] = rotl64_S (t, k);      \
+  st[j] = hc_rotl64_S (t, k);   \
   t = bc0;                      \
 }
 
@@ -98,11 +114,11 @@ DECLSPEC void keccak_transform_S (u64 *st)
 
     u64 t;
 
-    t = bc4 ^ rotl64_S (bc1, 1); Theta2 (0);
-    t = bc0 ^ rotl64_S (bc2, 1); Theta2 (1);
-    t = bc1 ^ rotl64_S (bc3, 1); Theta2 (2);
-    t = bc2 ^ rotl64_S (bc4, 1); Theta2 (3);
-    t = bc3 ^ rotl64_S (bc0, 1); Theta2 (4);
+    t = bc4 ^ hc_rotl64_S (bc1, 1); Theta2 (0);
+    t = bc0 ^ hc_rotl64_S (bc2, 1); Theta2 (1);
+    t = bc1 ^ hc_rotl64_S (bc3, 1); Theta2 (2);
+    t = bc2 ^ hc_rotl64_S (bc4, 1); Theta2 (3);
+    t = bc3 ^ hc_rotl64_S (bc0, 1); Theta2 (4);
 
     // Rho Pi
 
@@ -189,7 +205,7 @@ DECLSPEC void hmac_sha256_run_V (u32x *w0, u32x *w1, u32x *w2, u32x *w3, u32x *i
   sha256_transform_vector (w0, w1, w2, w3, digest);
 }
 
-__kernel void m15600_init (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_pbkdf2_t))
+KERNEL_FQ void m15600_init (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_pbkdf2_t))
 {
   /**
    * base
@@ -201,7 +217,7 @@ __kernel void m15600_init (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_p
 
   sha256_hmac_ctx_t sha256_hmac_ctx;
 
-  sha256_hmac_init_global_swap (&sha256_hmac_ctx, pws[gid].i, pws[gid].pw_len & 255);
+  sha256_hmac_init_global_swap (&sha256_hmac_ctx, pws[gid].i, pws[gid].pw_len);
 
   tmps[gid].ipad[0] = sha256_hmac_ctx.ipad.h[0];
   tmps[gid].ipad[1] = sha256_hmac_ctx.ipad.h[1];
@@ -221,7 +237,7 @@ __kernel void m15600_init (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_p
   tmps[gid].opad[6] = sha256_hmac_ctx.opad.h[6];
   tmps[gid].opad[7] = sha256_hmac_ctx.opad.h[7];
 
-  sha256_hmac_update_global_swap (&sha256_hmac_ctx, esalt_bufs[digests_offset].salt_buf, salt_bufs[salt_pos].salt_len);
+  sha256_hmac_update_global_swap (&sha256_hmac_ctx, esalt_bufs[DIGESTS_OFFSET].salt_buf, salt_bufs[SALT_POS].salt_len);
 
   for (u32 i = 0, j = 1; i < 8; i += 8, j += 1)
   {
@@ -273,7 +289,7 @@ __kernel void m15600_init (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_p
   }
 }
 
-__kernel void m15600_loop (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_pbkdf2_t))
+KERNEL_FQ void m15600_loop (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_pbkdf2_t))
 {
   const u64 gid = get_global_id (0);
 
@@ -379,7 +395,7 @@ __kernel void m15600_loop (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_p
   }
 }
 
-__kernel void m15600_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_pbkdf2_t))
+KERNEL_FQ void m15600_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_pbkdf2_t))
 {
   /**
    * base
@@ -397,21 +413,21 @@ __kernel void m15600_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_p
 
   u32 ciphertext[8];
 
-  ciphertext[0] = esalt_bufs[digests_offset].ciphertext[0];
-  ciphertext[1] = esalt_bufs[digests_offset].ciphertext[1];
-  ciphertext[2] = esalt_bufs[digests_offset].ciphertext[2];
-  ciphertext[3] = esalt_bufs[digests_offset].ciphertext[3];
-  ciphertext[4] = esalt_bufs[digests_offset].ciphertext[4];
-  ciphertext[5] = esalt_bufs[digests_offset].ciphertext[5];
-  ciphertext[6] = esalt_bufs[digests_offset].ciphertext[6];
-  ciphertext[7] = esalt_bufs[digests_offset].ciphertext[7];
+  ciphertext[0] = esalt_bufs[DIGESTS_OFFSET].ciphertext[0];
+  ciphertext[1] = esalt_bufs[DIGESTS_OFFSET].ciphertext[1];
+  ciphertext[2] = esalt_bufs[DIGESTS_OFFSET].ciphertext[2];
+  ciphertext[3] = esalt_bufs[DIGESTS_OFFSET].ciphertext[3];
+  ciphertext[4] = esalt_bufs[DIGESTS_OFFSET].ciphertext[4];
+  ciphertext[5] = esalt_bufs[DIGESTS_OFFSET].ciphertext[5];
+  ciphertext[6] = esalt_bufs[DIGESTS_OFFSET].ciphertext[6];
+  ciphertext[7] = esalt_bufs[DIGESTS_OFFSET].ciphertext[7];
 
   u32 key[4];
 
-  key[0] = swap32_S (tmps[gid].out[4]);
-  key[1] = swap32_S (tmps[gid].out[5]);
-  key[2] = swap32_S (tmps[gid].out[6]);
-  key[3] = swap32_S (tmps[gid].out[7]);
+  key[0] = hc_swap32_S (tmps[gid].out[4]);
+  key[1] = hc_swap32_S (tmps[gid].out[5]);
+  key[2] = hc_swap32_S (tmps[gid].out[6]);
+  key[3] = hc_swap32_S (tmps[gid].out[7]);
 
   u64 st[25];
 
@@ -447,7 +463,7 @@ __kernel void m15600_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_p
 
   const u32 add80w = (rsiz - 1) / 8;
 
-  st[add80w] |= 0x8000000000000000;
+  st[add80w] |= 0x8000000000000000UL;
 
   keccak_transform_S (st);
 
@@ -458,5 +474,7 @@ __kernel void m15600_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_p
 
   #define il_pos 0
 
+  #ifdef KERNEL_STATIC
   #include COMPARE_M
+  #endif
 }

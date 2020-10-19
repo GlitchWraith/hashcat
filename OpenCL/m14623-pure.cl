@@ -5,20 +5,90 @@
 
 #define NEW_SIMD_CODE
 
-#include "inc_vendor.cl"
-#include "inc_hash_constants.h"
-#include "inc_hash_functions.cl"
-#include "inc_types.cl"
+#ifdef KERNEL_STATIC
+#include "inc_vendor.h"
+#include "inc_types.h"
+#include "inc_platform.cl"
 #include "inc_common.cl"
 #include "inc_simd.cl"
+#include "inc_hash_sha1.cl"
 #include "inc_hash_sha256.cl"
+#include "inc_hash_sha512.cl"
+#include "inc_hash_ripemd160.cl"
 #include "inc_cipher_twofish.cl"
+#endif
 
+#define LUKS_STRIPES 4000
+
+typedef enum hc_luks_hash_type
+{
+  HC_LUKS_HASH_TYPE_SHA1      = 1,
+  HC_LUKS_HASH_TYPE_SHA256    = 2,
+  HC_LUKS_HASH_TYPE_SHA512    = 3,
+  HC_LUKS_HASH_TYPE_RIPEMD160 = 4,
+  HC_LUKS_HASH_TYPE_WHIRLPOOL = 5,
+
+} hc_luks_hash_type_t;
+
+typedef enum hc_luks_key_size
+{
+  HC_LUKS_KEY_SIZE_128 = 128,
+  HC_LUKS_KEY_SIZE_256 = 256,
+  HC_LUKS_KEY_SIZE_512 = 512,
+
+} hc_luks_key_size_t;
+
+typedef enum hc_luks_cipher_type
+{
+  HC_LUKS_CIPHER_TYPE_AES     = 1,
+  HC_LUKS_CIPHER_TYPE_SERPENT = 2,
+  HC_LUKS_CIPHER_TYPE_TWOFISH = 3,
+
+} hc_luks_cipher_type_t;
+
+typedef enum hc_luks_cipher_mode
+{
+  HC_LUKS_CIPHER_MODE_CBC_ESSIV = 1,
+  HC_LUKS_CIPHER_MODE_CBC_PLAIN = 2,
+  HC_LUKS_CIPHER_MODE_XTS_PLAIN = 3,
+
+} hc_luks_cipher_mode_t;
+
+typedef struct luks
+{
+  int hash_type;    // hc_luks_hash_type_t
+  int key_size;     // hc_luks_key_size_t
+  int cipher_type;  // hc_luks_cipher_type_t
+  int cipher_mode;  // hc_luks_cipher_mode_t
+
+  u32 ct_buf[128];
+
+  u32 af_src_buf[((HC_LUKS_KEY_SIZE_512 / 8) * LUKS_STRIPES) / 4];
+
+} luks_t;
+
+typedef struct luks_tmp
+{
+  u32 ipad32[8];
+  u64 ipad64[8];
+
+  u32 opad32[8];
+  u64 opad64[8];
+
+  u32 dgst32[32];
+  u64 dgst64[16];
+
+  u32 out32[32];
+  u64 out64[16];
+
+} luks_tmp_t;
+
+#ifdef KERNEL_STATIC
 #include "inc_luks_af.cl"
 #include "inc_luks_essiv.cl"
 #include "inc_luks_xts.cl"
-
 #include "inc_luks_twofish.cl"
+#endif
 
 #define COMPARE_S "inc_comp_single.cl"
 #define COMPARE_M "inc_comp_multi.cl"
@@ -67,7 +137,7 @@ DECLSPEC void hmac_sha256_run_V (u32x *w0, u32x *w1, u32x *w2, u32x *w3, u32x *i
   sha256_transform_vector (w0, w1, w2, w3, digest);
 }
 
-__kernel void m14623_init (KERN_ATTR_TMPS_ESALT (luks_tmp_t, luks_t))
+KERNEL_FQ void m14623_init (KERN_ATTR_TMPS_ESALT (luks_tmp_t, luks_t))
 {
   /**
    * base
@@ -79,7 +149,7 @@ __kernel void m14623_init (KERN_ATTR_TMPS_ESALT (luks_tmp_t, luks_t))
 
   sha256_hmac_ctx_t sha256_hmac_ctx;
 
-  sha256_hmac_init_global_swap (&sha256_hmac_ctx, pws[gid].i, pws[gid].pw_len & 255);
+  sha256_hmac_init_global_swap (&sha256_hmac_ctx, pws[gid].i, pws[gid].pw_len);
 
   tmps[gid].ipad32[0] = sha256_hmac_ctx.ipad.h[0];
   tmps[gid].ipad32[1] = sha256_hmac_ctx.ipad.h[1];
@@ -99,9 +169,9 @@ __kernel void m14623_init (KERN_ATTR_TMPS_ESALT (luks_tmp_t, luks_t))
   tmps[gid].opad32[6] = sha256_hmac_ctx.opad.h[6];
   tmps[gid].opad32[7] = sha256_hmac_ctx.opad.h[7];
 
-  sha256_hmac_update_global_swap (&sha256_hmac_ctx, salt_bufs[salt_pos].salt_buf, salt_bufs[salt_pos].salt_len);
+  sha256_hmac_update_global_swap (&sha256_hmac_ctx, salt_bufs[SALT_POS].salt_buf, salt_bufs[SALT_POS].salt_len);
 
-  const u32 key_size = esalt_bufs[digests_offset].key_size;
+  const u32 key_size = esalt_bufs[DIGESTS_OFFSET].key_size;
 
   for (u32 i = 0, j = 1; i < ((key_size / 8) / 4); i += 8, j += 1)
   {
@@ -153,7 +223,7 @@ __kernel void m14623_init (KERN_ATTR_TMPS_ESALT (luks_tmp_t, luks_t))
   }
 }
 
-__kernel void m14623_loop (KERN_ATTR_TMPS_ESALT (luks_tmp_t, luks_t))
+KERNEL_FQ void m14623_loop (KERN_ATTR_TMPS_ESALT (luks_tmp_t, luks_t))
 {
   const u64 gid = get_global_id (0);
 
@@ -180,7 +250,7 @@ __kernel void m14623_loop (KERN_ATTR_TMPS_ESALT (luks_tmp_t, luks_t))
   opad[6] = packv (tmps, opad32, gid, 6);
   opad[7] = packv (tmps, opad32, gid, 7);
 
-  u32 key_size = esalt_bufs[digests_offset].key_size;
+  u32 key_size = esalt_bufs[DIGESTS_OFFSET].key_size;
 
   for (u32 i = 0; i < ((key_size / 8) / 4); i += 8)
   {
@@ -261,7 +331,7 @@ __kernel void m14623_loop (KERN_ATTR_TMPS_ESALT (luks_tmp_t, luks_t))
   }
 }
 
-__kernel void m14623_comp (KERN_ATTR_TMPS_ESALT (luks_tmp_t, luks_t))
+KERNEL_FQ void m14623_comp (KERN_ATTR_TMPS_ESALT (luks_tmp_t, luks_t))
 {
   const u64 gid = get_global_id (0);
 
@@ -273,17 +343,17 @@ __kernel void m14623_comp (KERN_ATTR_TMPS_ESALT (luks_tmp_t, luks_t))
 
   u32 pt_buf[128];
 
-  luks_af_sha256_then_twofish_decrypt (&esalt_bufs[digests_offset], &tmps[gid], pt_buf);
+  luks_af_sha256_then_twofish_decrypt (&esalt_bufs[DIGESTS_OFFSET], &tmps[gid], pt_buf);
 
   // check entropy
 
-  const float entropy = get_entropy (pt_buf, 128);
+  const float entropy = hc_get_entropy (pt_buf, 128);
 
   if (entropy < MAX_ENTROPY)
   {
-    if (atomic_inc (&hashes_shown[digests_offset]) == 0)
+    if (atomic_inc (&hashes_shown[DIGESTS_OFFSET]) == 0)
     {
-      mark_hash (plains_buf, d_return_buf, salt_pos, digests_cnt, 0, 0, gid, 0);
+      mark_hash (plains_buf, d_return_buf, SALT_POS, digests_cnt, 0, 0, gid, 0, 0, 0);
     }
   }
 }

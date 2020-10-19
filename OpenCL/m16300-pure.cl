@@ -5,28 +5,45 @@
 
 #define NEW_SIMD_CODE
 
-#include "inc_vendor.cl"
-#include "inc_hash_constants.h"
-#include "inc_hash_functions.cl"
-#include "inc_types.cl"
+#ifdef KERNEL_STATIC
+#include "inc_vendor.h"
+#include "inc_types.h"
+#include "inc_platform.cl"
 #include "inc_common.cl"
 #include "inc_simd.cl"
 #include "inc_hash_sha256.cl"
 #include "inc_cipher_aes.cl"
+#endif
 
 #define COMPARE_S "inc_comp_single.cl"
 #define COMPARE_M "inc_comp_multi.cl"
 
-__constant u64a keccakf_rndc[24] =
+typedef struct ethereum_presale
 {
-  0x0000000000000001, 0x0000000000008082, 0x800000000000808a,
-  0x8000000080008000, 0x000000000000808b, 0x0000000080000001,
-  0x8000000080008081, 0x8000000000008009, 0x000000000000008a,
-  0x0000000000000088, 0x0000000080008009, 0x000000008000000a,
-  0x000000008000808b, 0x800000000000008b, 0x8000000000008089,
-  0x8000000000008003, 0x8000000000008002, 0x8000000000000080,
-  0x000000000000800a, 0x800000008000000a, 0x8000000080008081,
-  0x8000000000008080, 0x0000000080000001, 0x8000000080008008
+  u32 iv[4];
+  u32 enc_seed[152];
+  u32 enc_seed_len;
+
+} ethereum_presale_t;
+
+typedef struct pbkdf2_sha256_tmp
+{
+  u32  ipad[8];
+  u32  opad[8];
+
+  u32  dgst[32];
+  u32  out[32];
+
+} pbkdf2_sha256_tmp_t;
+
+CONSTANT_VK u64a keccakf_rndc[24] =
+{
+  KECCAK_RNDC_00, KECCAK_RNDC_01, KECCAK_RNDC_02, KECCAK_RNDC_03,
+  KECCAK_RNDC_04, KECCAK_RNDC_05, KECCAK_RNDC_06, KECCAK_RNDC_07,
+  KECCAK_RNDC_08, KECCAK_RNDC_09, KECCAK_RNDC_10, KECCAK_RNDC_11,
+  KECCAK_RNDC_12, KECCAK_RNDC_13, KECCAK_RNDC_14, KECCAK_RNDC_15,
+  KECCAK_RNDC_16, KECCAK_RNDC_17, KECCAK_RNDC_18, KECCAK_RNDC_19,
+  KECCAK_RNDC_20, KECCAK_RNDC_21, KECCAK_RNDC_22, KECCAK_RNDC_23
 };
 
 #ifndef KECCAK_ROUNDS
@@ -49,7 +66,7 @@ __constant u64a keccakf_rndc[24] =
   u32 j = keccakf_piln[s];      \
   u32 k = keccakf_rotc[s];      \
   bc0 = st[j];                  \
-  st[j] = rotl64_S (t, k);      \
+  st[j] = hc_rotl64_S (t, k);   \
   t = bc0;                      \
 }
 
@@ -99,11 +116,11 @@ DECLSPEC void keccak_transform_S (u64 *st)
 
     u64 t;
 
-    t = bc4 ^ rotl64_S (bc1, 1); Theta2 (0);
-    t = bc0 ^ rotl64_S (bc2, 1); Theta2 (1);
-    t = bc1 ^ rotl64_S (bc3, 1); Theta2 (2);
-    t = bc2 ^ rotl64_S (bc4, 1); Theta2 (3);
-    t = bc3 ^ rotl64_S (bc0, 1); Theta2 (4);
+    t = bc4 ^ hc_rotl64_S (bc1, 1); Theta2 (0);
+    t = bc0 ^ hc_rotl64_S (bc2, 1); Theta2 (1);
+    t = bc1 ^ hc_rotl64_S (bc3, 1); Theta2 (2);
+    t = bc2 ^ hc_rotl64_S (bc4, 1); Theta2 (3);
+    t = bc3 ^ hc_rotl64_S (bc0, 1); Theta2 (4);
 
     // Rho Pi
 
@@ -190,7 +207,7 @@ DECLSPEC void hmac_sha256_run_V (u32x *w0, u32x *w1, u32x *w2, u32x *w3, u32x *i
   sha256_transform_vector (w0, w1, w2, w3, digest);
 }
 
-__kernel void m16300_init (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_presale_t))
+KERNEL_FQ void m16300_init (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_presale_t))
 {
   /**
    * base
@@ -202,7 +219,7 @@ __kernel void m16300_init (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_p
 
   sha256_hmac_ctx_t sha256_hmac_ctx;
 
-  sha256_hmac_init_global_swap (&sha256_hmac_ctx, pws[gid].i, pws[gid].pw_len & 255);
+  sha256_hmac_init_global_swap (&sha256_hmac_ctx, pws[gid].i, pws[gid].pw_len);
 
   tmps[gid].ipad[0] = sha256_hmac_ctx.ipad.h[0];
   tmps[gid].ipad[1] = sha256_hmac_ctx.ipad.h[1];
@@ -222,7 +239,7 @@ __kernel void m16300_init (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_p
   tmps[gid].opad[6] = sha256_hmac_ctx.opad.h[6];
   tmps[gid].opad[7] = sha256_hmac_ctx.opad.h[7];
 
-  sha256_hmac_update_global_swap (&sha256_hmac_ctx, pws[gid].i, pws[gid].pw_len & 255);
+  sha256_hmac_update_global_swap (&sha256_hmac_ctx, pws[gid].i, pws[gid].pw_len);
 
   for (u32 i = 0, j = 1; i < 8; i += 8, j += 1)
   {
@@ -274,7 +291,7 @@ __kernel void m16300_init (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_p
   }
 }
 
-__kernel void m16300_loop (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_presale_t))
+KERNEL_FQ void m16300_loop (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_presale_t))
 {
   const u64 gid = get_global_id (0);
 
@@ -380,7 +397,7 @@ __kernel void m16300_loop (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_p
   }
 }
 
-__kernel void m16300_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_presale_t))
+KERNEL_FQ void m16300_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_presale_t))
 {
   /**
    * base
@@ -396,19 +413,19 @@ __kernel void m16300_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_p
 
   #ifdef REAL_SHM
 
-  __local u32 s_td0[256];
-  __local u32 s_td1[256];
-  __local u32 s_td2[256];
-  __local u32 s_td3[256];
-  __local u32 s_td4[256];
+  LOCAL_VK u32 s_td0[256];
+  LOCAL_VK u32 s_td1[256];
+  LOCAL_VK u32 s_td2[256];
+  LOCAL_VK u32 s_td3[256];
+  LOCAL_VK u32 s_td4[256];
 
-  __local u32 s_te0[256];
-  __local u32 s_te1[256];
-  __local u32 s_te2[256];
-  __local u32 s_te3[256];
-  __local u32 s_te4[256];
+  LOCAL_VK u32 s_te0[256];
+  LOCAL_VK u32 s_te1[256];
+  LOCAL_VK u32 s_te2[256];
+  LOCAL_VK u32 s_te3[256];
+  LOCAL_VK u32 s_te4[256];
 
-  for (MAYBE_VOLATILE u32 i = lid; i < 256; i += lsz)
+  for (u32 i = lid; i < 256; i += lsz)
   {
     s_td0[i] = td0[i];
     s_td1[i] = td1[i];
@@ -423,21 +440,21 @@ __kernel void m16300_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_p
     s_te4[i] = te4[i];
   }
 
-  barrier (CLK_LOCAL_MEM_FENCE);
+  SYNC_THREADS ();
 
   #else
 
-  __constant u32a *s_td0 = td0;
-  __constant u32a *s_td1 = td1;
-  __constant u32a *s_td2 = td2;
-  __constant u32a *s_td3 = td3;
-  __constant u32a *s_td4 = td4;
+  CONSTANT_AS u32a *s_td0 = td0;
+  CONSTANT_AS u32a *s_td1 = td1;
+  CONSTANT_AS u32a *s_td2 = td2;
+  CONSTANT_AS u32a *s_td3 = td3;
+  CONSTANT_AS u32a *s_td4 = td4;
 
-  __constant u32a *s_te0 = te0;
-  __constant u32a *s_te1 = te1;
-  __constant u32a *s_te2 = te2;
-  __constant u32a *s_te3 = te3;
-  __constant u32a *s_te4 = te4;
+  CONSTANT_AS u32a *s_te0 = te0;
+  CONSTANT_AS u32a *s_te1 = te1;
+  CONSTANT_AS u32a *s_te2 = te2;
+  CONSTANT_AS u32a *s_te3 = te3;
+  CONSTANT_AS u32a *s_te4 = te4;
 
   #endif
 
@@ -462,25 +479,25 @@ __kernel void m16300_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_p
    * aes init
    */
 
-  #define KEYLEN 60
+  #define KEYLEN 44
 
   u32 ks[KEYLEN];
 
-  AES128_set_decrypt_key (ks, ukey, s_te0, s_te1, s_te2, s_te3, s_te4, s_td0, s_td1, s_td2, s_td3, s_td4);
+  AES128_set_decrypt_key (ks, ukey, s_te0, s_te1, s_te2, s_te3, s_td0, s_td1, s_td2, s_td3);
 
   u32 iv[4];
 
-  iv[0] = esalt_bufs[digests_offset].iv[0];
-  iv[1] = esalt_bufs[digests_offset].iv[1];
-  iv[2] = esalt_bufs[digests_offset].iv[2];
-  iv[3] = esalt_bufs[digests_offset].iv[3];
+  iv[0] = esalt_bufs[DIGESTS_OFFSET].iv[0];
+  iv[1] = esalt_bufs[DIGESTS_OFFSET].iv[1];
+  iv[2] = esalt_bufs[DIGESTS_OFFSET].iv[2];
+  iv[3] = esalt_bufs[DIGESTS_OFFSET].iv[3];
 
   u32 a = iv[0];
   u32 b = iv[1];
   u32 c = iv[2];
   u32 d = iv[3];
 
-  u32 enc_seed_len = esalt_bufs[digests_offset].enc_seed_len;
+  u32 enc_seed_len = esalt_bufs[DIGESTS_OFFSET].enc_seed_len;
 
   u64 seed[76 + 1]; // we need the + 1 to add the final \x02
 
@@ -491,10 +508,10 @@ __kernel void m16300_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_p
   {
     u32 data[4];
 
-    data[0] = esalt_bufs[digests_offset].enc_seed[loop_idx + 0];
-    data[1] = esalt_bufs[digests_offset].enc_seed[loop_idx + 1];
-    data[2] = esalt_bufs[digests_offset].enc_seed[loop_idx + 2];
-    data[3] = esalt_bufs[digests_offset].enc_seed[loop_idx + 3];
+    data[0] = esalt_bufs[DIGESTS_OFFSET].enc_seed[loop_idx + 0];
+    data[1] = esalt_bufs[DIGESTS_OFFSET].enc_seed[loop_idx + 1];
+    data[2] = esalt_bufs[DIGESTS_OFFSET].enc_seed[loop_idx + 2];
+    data[3] = esalt_bufs[DIGESTS_OFFSET].enc_seed[loop_idx + 3];
 
     u32 out[4];
 
@@ -505,10 +522,10 @@ __kernel void m16300_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_p
     c ^= out[2];
     d ^= out[3];
 
-    a = swap32_S (a);
-    b = swap32_S (b);
-    c = swap32_S (c);
-    d = swap32_S (d);
+    a = hc_swap32_S (a);
+    b = hc_swap32_S (b);
+    c = hc_swap32_S (c);
+    d = hc_swap32_S (d);
 
     seed[seed_idx + 0] = hl32_to_64_S (b, a);
     seed[seed_idx + 1] = hl32_to_64_S (d, c);
@@ -533,186 +550,186 @@ __kernel void m16300_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_p
   switch (padding_len)
   {
     case 16:
-        if (((seed[seed_idx - 1] & 0xffffffffffffffff) != 0x1010101010101010) ||
-            ((seed[seed_idx - 2] & 0xffffffffffffffff) != 0x1010101010101010))
+        if (((seed[seed_idx - 1] & 0xffffffffffffffffUL) != 0x1010101010101010UL) ||
+            ((seed[seed_idx - 2] & 0xffffffffffffffffUL) != 0x1010101010101010UL))
         {
           return;
         }
 
-        seed[seed_idx - 2] = 0x0102;
-        seed[seed_idx - 1] = 0;
+        seed[seed_idx - 2] = 0x0102UL;
+        seed[seed_idx - 1] = 0UL;
       break;
 
     case 15:
-        if (((seed[seed_idx - 1] & 0xffffffffffffffff) != 0x0f0f0f0f0f0f0f0f) ||
-            ((seed[seed_idx - 2] & 0xffffffffffffff00) != 0x0f0f0f0f0f0f0f00))
+        if (((seed[seed_idx - 1] & 0xffffffffffffffffUL) != 0x0f0f0f0f0f0f0f0fUL) ||
+            ((seed[seed_idx - 2] & 0xffffffffffffff00UL) != 0x0f0f0f0f0f0f0f00UL))
         {
           return;
         }
 
-        seed[seed_idx - 2] &= 0x00000000000000ff;
-        seed[seed_idx - 2] |= 0x0000000000010200;
-        seed[seed_idx - 1] = 0;
+        seed[seed_idx - 2] &= 0x00000000000000ffUL;
+        seed[seed_idx - 2] |= 0x0000000000010200UL;
+        seed[seed_idx - 1]  = 0UL;
       break;
 
     case 14:
-        if (((seed[seed_idx - 1] & 0xffffffffffffffff) != 0x0e0e0e0e0e0e0e0e) ||
-            ((seed[seed_idx - 2] & 0xffffffffffff0000) != 0x0e0e0e0e0e0e0000))
+        if (((seed[seed_idx - 1] & 0xffffffffffffffffUL) != 0x0e0e0e0e0e0e0e0eUL) ||
+            ((seed[seed_idx - 2] & 0xffffffffffff0000UL) != 0x0e0e0e0e0e0e0000UL))
         {
           return;
         }
 
-        seed[seed_idx - 2] &= 0x000000000000ffff;
-        seed[seed_idx - 2] |= 0x0000000001020000;
-        seed[seed_idx - 1] = 0;
+        seed[seed_idx - 2] &= 0x000000000000ffffUL;
+        seed[seed_idx - 2] |= 0x0000000001020000UL;
+        seed[seed_idx - 1]  = 0UL;
       break;
 
     case 13:
-        if (((seed[seed_idx - 1] & 0xffffffffffffffff) != 0x0d0d0d0d0d0d0d0d) ||
-            ((seed[seed_idx - 2] & 0xffffffffff000000) != 0x0d0d0d0d0d000000))
+        if (((seed[seed_idx - 1] & 0xffffffffffffffffUL) != 0x0d0d0d0d0d0d0d0dUL) ||
+            ((seed[seed_idx - 2] & 0xffffffffff000000UL) != 0x0d0d0d0d0d000000UL))
         {
           return;
         }
 
-        seed[seed_idx - 2] &= 0x0000000000ffffff;
-        seed[seed_idx - 2] |= 0x0000000102000000;
-        seed[seed_idx - 1] = 0;
+        seed[seed_idx - 2] &= 0x0000000000ffffffUL;
+        seed[seed_idx - 2] |= 0x0000000102000000UL;
+        seed[seed_idx - 1]  = 0UL;
       break;
 
     case 12:
-        if (((seed[seed_idx - 1] & 0xffffffffffffffff) != 0x0c0c0c0c0c0c0c0c) ||
-            ((seed[seed_idx - 2] & 0xffffffff00000000) != 0x0c0c0c0c00000000))
+        if (((seed[seed_idx - 1] & 0xffffffffffffffffUL) != 0x0c0c0c0c0c0c0c0cUL) ||
+            ((seed[seed_idx - 2] & 0xffffffff00000000UL) != 0x0c0c0c0c00000000UL))
         {
           return;
         }
 
-        seed[seed_idx - 2] &= 0x00000000ffffffff;
-        seed[seed_idx - 2] |= 0x0000010200000000;
-        seed[seed_idx - 1] = 0;
+        seed[seed_idx - 2] &= 0x00000000ffffffffUL;
+        seed[seed_idx - 2] |= 0x0000010200000000UL;
+        seed[seed_idx - 1]  = 0UL;
       break;
 
     case 11:
-        if (((seed[seed_idx - 1] & 0xffffffffffffffff) != 0x0b0b0b0b0b0b0b0b) ||
-            ((seed[seed_idx - 2] & 0xffffff0000000000) != 0x0b0b0b0000000000))
+        if (((seed[seed_idx - 1] & 0xffffffffffffffffUL) != 0x0b0b0b0b0b0b0b0bUL) ||
+            ((seed[seed_idx - 2] & 0xffffff0000000000UL) != 0x0b0b0b0000000000UL))
         {
           return;
         }
 
-        seed[seed_idx - 2] &= 0x000000ffffffffff;
-        seed[seed_idx - 2] |= 0x0001020000000000;
-        seed[seed_idx - 1] = 0;
+        seed[seed_idx - 2] &= 0x000000ffffffffffUL;
+        seed[seed_idx - 2] |= 0x0001020000000000UL;
+        seed[seed_idx - 1]  = 0UL;
       break;
 
     case 10:
-        if (((seed[seed_idx - 1] & 0xffffffffffffffff) != 0x0a0a0a0a0a0a0a0a) ||
-            ((seed[seed_idx - 2] & 0xffff000000000000) != 0x0a0a000000000000))
+        if (((seed[seed_idx - 1] & 0xffffffffffffffffUL) != 0x0a0a0a0a0a0a0a0aUL) ||
+            ((seed[seed_idx - 2] & 0xffff000000000000UL) != 0x0a0a000000000000UL))
         {
           return;
         }
 
-        seed[seed_idx - 2] &= 0x0000ffffffffffff;
-        seed[seed_idx - 2] |= 0x0102000000000000;
-        seed[seed_idx - 1] = 0;
+        seed[seed_idx - 2] &= 0x0000ffffffffffffUL;
+        seed[seed_idx - 2] |= 0x0102000000000000UL;
+        seed[seed_idx - 1]  = 0UL;
       break;
 
     case  9:
-        if (((seed[seed_idx - 1] & 0xffffffffffffffff) != 0x0909090909090909) ||
-            ((seed[seed_idx - 2] & 0xff00000000000000) != 0x0900000000000000))
+        if (((seed[seed_idx - 1] & 0xffffffffffffffffUL) != 0x0909090909090909UL) ||
+            ((seed[seed_idx - 2] & 0xff00000000000000UL) != 0x0900000000000000UL))
         {
           return;
         }
 
-        seed[seed_idx - 2] &= 0x00ffffffffffffff;
-        seed[seed_idx - 2] |= 0x0200000000000000;
-        seed[seed_idx - 1] = 0x01;
+        seed[seed_idx - 2] &= 0x00ffffffffffffffUL;
+        seed[seed_idx - 2] |= 0x0200000000000000UL;
+        seed[seed_idx - 1]  = 0x01UL;
       break;
 
     case  8:
-        if (((seed[seed_idx - 1] & 0xffffffffffffffff) != 0x0808080808080808) ||
-            ((seed[seed_idx - 2] & 0x0000000000000000) != 0x0000000000000000))
+        if (((seed[seed_idx - 1] & 0xffffffffffffffffUL) != 0x0808080808080808UL) ||
+            ((seed[seed_idx - 2] & 0x0000000000000000UL) != 0x0000000000000000UL))
         {
           return;
         }
 
-        seed[seed_idx - 1] = 0x0102;
+        seed[seed_idx - 1]  = 0x0102UL;
       break;
 
     case  7:
-        if (((seed[seed_idx - 1] & 0xffffffffffffff00) != 0x0707070707070700) ||
-            ((seed[seed_idx - 2] & 0x0000000000000000) != 0x0000000000000000))
+        if (((seed[seed_idx - 1] & 0xffffffffffffff00UL) != 0x0707070707070700UL) ||
+            ((seed[seed_idx - 2] & 0x0000000000000000UL) != 0x0000000000000000UL))
         {
           return;
         }
 
-        seed[seed_idx - 1] &= 0x00000000000000ff;
-        seed[seed_idx - 1] |= 0x0000000000010200;
+        seed[seed_idx - 1] &= 0x00000000000000ffUL;
+        seed[seed_idx - 1] |= 0x0000000000010200UL;
       break;
 
     case  6:
-        if (((seed[seed_idx - 1] & 0xffffffffffff0000) != 0x0606060606060000) ||
-            ((seed[seed_idx - 2] & 0x0000000000000000) != 0x0000000000000000))
+        if (((seed[seed_idx - 1] & 0xffffffffffff0000UL) != 0x0606060606060000UL) ||
+            ((seed[seed_idx - 2] & 0x0000000000000000UL) != 0x0000000000000000UL))
         {
           return;
         }
 
-        seed[seed_idx - 1] &= 0x000000000000ffff;
-        seed[seed_idx - 1] |= 0x0000000001020000;
+        seed[seed_idx - 1] &= 0x000000000000ffffUL;
+        seed[seed_idx - 1] |= 0x0000000001020000UL;
       break;
 
     case  5:
-        if (((seed[seed_idx - 1] & 0xffffffffff000000) != 0x0505050505000000) ||
-            ((seed[seed_idx - 2] & 0x0000000000000000) != 0x0000000000000000))
+        if (((seed[seed_idx - 1] & 0xffffffffff000000UL) != 0x0505050505000000UL) ||
+            ((seed[seed_idx - 2] & 0x0000000000000000UL) != 0x0000000000000000UL))
         {
           return;
         }
 
-        seed[seed_idx - 1] &= 0x0000000000ffffff;
-        seed[seed_idx - 1] |= 0x0000000102000000;
+        seed[seed_idx - 1] &= 0x0000000000ffffffUL;
+        seed[seed_idx - 1] |= 0x0000000102000000UL;
       break;
 
     case  4:
-        if (((seed[seed_idx - 1] & 0xffffffff00000000) != 0x0404040400000000) ||
-            ((seed[seed_idx - 2] & 0x0000000000000000) != 0x0000000000000000))
+        if (((seed[seed_idx - 1] & 0xffffffff00000000UL) != 0x0404040400000000UL) ||
+            ((seed[seed_idx - 2] & 0x0000000000000000UL) != 0x0000000000000000UL))
         {
           return;
         }
 
-        seed[seed_idx - 1] &= 0x00000000ffffffff;
-        seed[seed_idx - 1] |= 0x0000010200000000;
+        seed[seed_idx - 1] &= 0x00000000ffffffffUL;
+        seed[seed_idx - 1] |= 0x0000010200000000UL;
       break;
 
     case  3:
-        if (((seed[seed_idx - 1] & 0xffffff0000000000) != 0x0303030000000000) ||
-            ((seed[seed_idx - 2] & 0x0000000000000000) != 0x0000000000000000))
+        if (((seed[seed_idx - 1] & 0xffffff0000000000UL) != 0x0303030000000000UL) ||
+            ((seed[seed_idx - 2] & 0x0000000000000000UL) != 0x0000000000000000UL))
         {
           return;
         }
 
-        seed[seed_idx - 1] &= 0x000000ffffffffff;
-        seed[seed_idx - 1] |= 0x0001020000000000;
+        seed[seed_idx - 1] &= 0x000000ffffffffffUL;
+        seed[seed_idx - 1] |= 0x0001020000000000UL;
       break;
 
     case  2:
-        if (((seed[seed_idx - 1] & 0xffff000000000000) != 0x0202000000000000) ||
-            ((seed[seed_idx - 2] & 0x0000000000000000) != 0x0000000000000000))
+        if (((seed[seed_idx - 1] & 0xffff000000000000UL) != 0x0202000000000000UL) ||
+            ((seed[seed_idx - 2] & 0x0000000000000000UL) != 0x0000000000000000UL))
         {
           return;
         }
 
-        seed[seed_idx - 1] &= 0x0000ffffffffffff;
-        seed[seed_idx - 1] |= 0x0102000000000000;
+        seed[seed_idx - 1] &= 0x0000ffffffffffffUL;
+        seed[seed_idx - 1] |= 0x0102000000000000UL;
       break;
 
     case  1:
-        if (((seed[seed_idx - 1] & 0xff00000000000000) != 0x0100000000000000) ||
-            ((seed[seed_idx - 2] & 0x0000000000000000) != 0x0000000000000000))
+        if (((seed[seed_idx - 1] & 0xff00000000000000UL) != 0x0100000000000000UL) ||
+            ((seed[seed_idx - 2] & 0x0000000000000000UL) != 0x0000000000000000UL))
         {
           return;
         }
 
-        seed[seed_idx - 1] &= 0x00ffffffffffffff;
-        seed[seed_idx - 1] |= 0x0200000000000000;
-        seed[seed_idx - 0] = 0x01;
+        seed[seed_idx - 1] &= 0x00ffffffffffffffUL;
+        seed[seed_idx - 1] |= 0x0200000000000000UL;
+        seed[seed_idx - 0]  = 0x01UL;
       break;
 
     default:
@@ -742,7 +759,7 @@ __kernel void m16300_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_p
 
   // final:
 
-  st[16] ^= 0x8000000000000000;
+  st[16] ^= 0x8000000000000000UL;
 
   keccak_transform_S (st);
 
@@ -753,5 +770,7 @@ __kernel void m16300_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, ethereum_p
 
   #define il_pos 0
 
+  #ifdef KERNEL_STATIC
   #include COMPARE_M
+  #endif
 }

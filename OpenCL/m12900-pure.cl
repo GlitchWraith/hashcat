@@ -5,16 +5,33 @@
 
 #define NEW_SIMD_CODE
 
-#include "inc_vendor.cl"
-#include "inc_hash_constants.h"
-#include "inc_hash_functions.cl"
-#include "inc_types.cl"
+#ifdef KERNEL_STATIC
+#include "inc_vendor.h"
+#include "inc_types.h"
+#include "inc_platform.cl"
 #include "inc_common.cl"
 #include "inc_simd.cl"
 #include "inc_hash_sha256.cl"
+#endif
 
 #define COMPARE_S "inc_comp_single.cl"
 #define COMPARE_M "inc_comp_multi.cl"
+
+typedef struct pbkdf2_sha256_tmp
+{
+  u32  ipad[8];
+  u32  opad[8];
+
+  u32  dgst[32];
+  u32  out[32];
+
+} pbkdf2_sha256_tmp_t;
+
+typedef struct pbkdf2_sha256
+{
+  u32 salt_buf[64];
+
+} pbkdf2_sha256_t;
 
 DECLSPEC void hmac_sha256_run_V (u32x *w0, u32x *w1, u32x *w2, u32x *w3, u32x *ipad, u32x *opad, u32x *digest)
 {
@@ -58,7 +75,7 @@ DECLSPEC void hmac_sha256_run_V (u32x *w0, u32x *w1, u32x *w2, u32x *w3, u32x *i
   sha256_transform_vector (w0, w1, w2, w3, digest);
 }
 
-__kernel void m12900_init (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, pbkdf2_sha256_t))
+KERNEL_FQ void m12900_init (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, pbkdf2_sha256_t))
 {
   /**
    * base
@@ -70,7 +87,7 @@ __kernel void m12900_init (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, pbkdf2_sha
 
   sha256_hmac_ctx_t sha256_hmac_ctx;
 
-  sha256_hmac_init_global_swap (&sha256_hmac_ctx, pws[gid].i, pws[gid].pw_len & 255);
+  sha256_hmac_init_global_swap (&sha256_hmac_ctx, pws[gid].i, pws[gid].pw_len);
 
   tmps[gid].ipad[0] = sha256_hmac_ctx.ipad.h[0];
   tmps[gid].ipad[1] = sha256_hmac_ctx.ipad.h[1];
@@ -95,10 +112,10 @@ __kernel void m12900_init (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, pbkdf2_sha
   u32 w2[4];
   u32 w3[4];
 
-  w0[0] = salt_bufs[salt_pos].salt_buf[0];
-  w0[1] = salt_bufs[salt_pos].salt_buf[1];
-  w0[2] = salt_bufs[salt_pos].salt_buf[2];
-  w0[3] = salt_bufs[salt_pos].salt_buf[3];
+  w0[0] = salt_bufs[SALT_POS].salt_buf[0];
+  w0[1] = salt_bufs[SALT_POS].salt_buf[1];
+  w0[2] = salt_bufs[SALT_POS].salt_buf[2];
+  w0[3] = salt_bufs[SALT_POS].salt_buf[3];
   w1[0] = 0;
   w1[1] = 0;
   w1[2] = 0;
@@ -159,7 +176,7 @@ __kernel void m12900_init (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, pbkdf2_sha
   }
 }
 
-__kernel void m12900_loop (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, pbkdf2_sha256_t))
+KERNEL_FQ void m12900_loop (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, pbkdf2_sha256_t))
 {
   const u64 gid = get_global_id (0);
 
@@ -265,7 +282,7 @@ __kernel void m12900_loop (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, pbkdf2_sha
   }
 }
 
-__kernel void m12900_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, pbkdf2_sha256_t))
+KERNEL_FQ void m12900_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, pbkdf2_sha256_t))
 {
   /**
    * base
@@ -303,14 +320,14 @@ __kernel void m12900_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, pbkdf2_sha
 
   sha256_hmac_init_64 (&ctx, w0, w1, w2, w3);
 
-  w0[0] = salt_bufs[salt_pos].salt_buf[ 4];
-  w0[1] = salt_bufs[salt_pos].salt_buf[ 5];
-  w0[2] = salt_bufs[salt_pos].salt_buf[ 6];
-  w0[3] = salt_bufs[salt_pos].salt_buf[ 7];
-  w1[0] = salt_bufs[salt_pos].salt_buf[ 8];
-  w1[1] = salt_bufs[salt_pos].salt_buf[ 9];
-  w1[2] = salt_bufs[salt_pos].salt_buf[10];
-  w1[3] = salt_bufs[salt_pos].salt_buf[11];
+  w0[0] = salt_bufs[SALT_POS].salt_buf[ 4];
+  w0[1] = salt_bufs[SALT_POS].salt_buf[ 5];
+  w0[2] = salt_bufs[SALT_POS].salt_buf[ 6];
+  w0[3] = salt_bufs[SALT_POS].salt_buf[ 7];
+  w1[0] = salt_bufs[SALT_POS].salt_buf[ 8];
+  w1[1] = salt_bufs[SALT_POS].salt_buf[ 9];
+  w1[2] = salt_bufs[SALT_POS].salt_buf[10];
+  w1[3] = salt_bufs[SALT_POS].salt_buf[11];
   w2[0] = 0;
   w2[1] = 0;
   w2[2] = 0;
@@ -331,5 +348,7 @@ __kernel void m12900_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, pbkdf2_sha
 
   #define il_pos 0
 
+  #ifdef KERNEL_STATIC
   #include COMPARE_M
+  #endif
 }

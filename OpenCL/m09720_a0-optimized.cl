@@ -5,15 +5,25 @@
 
 #define NEW_SIMD_CODE
 
-#include "inc_vendor.cl"
-#include "inc_hash_constants.h"
-#include "inc_hash_functions.cl"
-#include "inc_types.cl"
+#ifdef KERNEL_STATIC
+#include "inc_vendor.h"
+#include "inc_types.h"
+#include "inc_platform.cl"
 #include "inc_common.cl"
 #include "inc_rp_optimized.h"
 #include "inc_rp_optimized.cl"
 #include "inc_simd.cl"
 #include "inc_hash_md5.cl"
+#endif
+
+typedef struct oldoffice01
+{
+  u32 version;
+  u32 encryptedVerifier[4];
+  u32 encryptedVerifierHash[4];
+  u32 rc4key[2];
+
+} oldoffice01_t;
 
 DECLSPEC void gen336 (u32x *digest_pre, u32 *salt_buf, u32x *digest)
 {
@@ -359,7 +369,7 @@ DECLSPEC void gen336 (u32x *digest_pre, u32 *salt_buf, u32x *digest)
   md5_transform_vector (w0_t, w1_t, w2_t, w3_t, digest);
 }
 
-__kernel void m09720_m04 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
+KERNEL_FQ void m09720_m04 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
 {
   /**
    * modifier
@@ -395,10 +405,10 @@ __kernel void m09720_m04 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
 
   u32 salt_buf[4];
 
-  salt_buf[0] = salt_bufs[salt_pos].salt_buf[0];
-  salt_buf[1] = salt_bufs[salt_pos].salt_buf[1];
-  salt_buf[2] = salt_bufs[salt_pos].salt_buf[2];
-  salt_buf[3] = salt_bufs[salt_pos].salt_buf[3];
+  salt_buf[0] = salt_bufs[SALT_POS].salt_buf[0];
+  salt_buf[1] = salt_bufs[SALT_POS].salt_buf[1];
+  salt_buf[2] = salt_bufs[SALT_POS].salt_buf[2];
+  salt_buf[3] = salt_bufs[SALT_POS].salt_buf[3];
 
   /**
    * loop
@@ -411,7 +421,7 @@ __kernel void m09720_m04 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
     u32x w2[4] = { 0 };
     u32x w3[4] = { 0 };
 
-    const u32x out_len = apply_rules_vect (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
+    const u32x out_len = apply_rules_vect_optimized (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
 
     append_0x80_2x4_VV (w0, w1, out_len);
 
@@ -457,15 +467,15 @@ __kernel void m09720_m04 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
   }
 }
 
-__kernel void m09720_m08 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
+KERNEL_FQ void m09720_m08 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
 {
 }
 
-__kernel void m09720_m16 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
+KERNEL_FQ void m09720_m16 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
 {
 }
 
-__kernel void m09720_s04 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
+KERNEL_FQ void m09720_s04 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
 {
   /**
    * modifier
@@ -501,10 +511,10 @@ __kernel void m09720_s04 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
 
   u32 salt_buf[4];
 
-  salt_buf[0] = salt_bufs[salt_pos].salt_buf[0];
-  salt_buf[1] = salt_bufs[salt_pos].salt_buf[1];
-  salt_buf[2] = salt_bufs[salt_pos].salt_buf[2];
-  salt_buf[3] = salt_bufs[salt_pos].salt_buf[3];
+  salt_buf[0] = salt_bufs[SALT_POS].salt_buf[0];
+  salt_buf[1] = salt_bufs[SALT_POS].salt_buf[1];
+  salt_buf[2] = salt_bufs[SALT_POS].salt_buf[2];
+  salt_buf[3] = salt_bufs[SALT_POS].salt_buf[3];
 
   /**
    * digest
@@ -512,8 +522,8 @@ __kernel void m09720_s04 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
 
   const u32 search[4] =
   {
-    digests_buf[digests_offset].digest_buf[DGST_R0],
-    digests_buf[digests_offset].digest_buf[DGST_R1],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R0],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R1],
     0,
     0
   };
@@ -529,7 +539,7 @@ __kernel void m09720_s04 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
     u32x w2[4] = { 0 };
     u32x w3[4] = { 0 };
 
-    const u32x out_len = apply_rules_vect (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
+    const u32x out_len = apply_rules_vect_optimized (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
 
     append_0x80_2x4_VV (w0, w1, out_len);
 
@@ -575,10 +585,10 @@ __kernel void m09720_s04 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
   }
 }
 
-__kernel void m09720_s08 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
+KERNEL_FQ void m09720_s08 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
 {
 }
 
-__kernel void m09720_s16 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
+KERNEL_FQ void m09720_s16 (KERN_ATTR_RULES_ESALT (oldoffice01_t))
 {
 }

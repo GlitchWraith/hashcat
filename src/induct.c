@@ -43,7 +43,7 @@ int induct_ctx_init (hashcat_ctx_t *hashcat_ctx)
   if (user_options->example_hashes == true) return 0;
   if (user_options->keyspace       == true) return 0;
   if (user_options->left           == true) return 0;
-  if (user_options->opencl_info    == true) return 0;
+  if (user_options->backend_info   == true) return 0;
   if (user_options->show           == true) return 0;
   if (user_options->stdout_flag    == true) return 0;
   if (user_options->speed_only     == true) return 0;
@@ -51,7 +51,8 @@ int induct_ctx_init (hashcat_ctx_t *hashcat_ctx)
   if (user_options->usage          == true) return 0;
   if (user_options->version        == true) return 0;
 
-  if (user_options->attack_mode != ATTACK_MODE_STRAIGHT) return 0;
+  if ((user_options->attack_mode != ATTACK_MODE_STRAIGHT)
+   && (user_options->attack_mode != ATTACK_MODE_ASSOCIATION)) return 0;
 
   induct_ctx->enabled = true;
 

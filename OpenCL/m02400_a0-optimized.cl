@@ -5,16 +5,18 @@
 
 //#define NEW_SIMD_CODE
 
-#include "inc_vendor.cl"
-#include "inc_hash_constants.h"
-#include "inc_hash_functions.cl"
-#include "inc_types.cl"
+#ifdef KERNEL_STATIC
+#include "inc_vendor.h"
+#include "inc_types.h"
+#include "inc_platform.cl"
 #include "inc_common.cl"
 #include "inc_rp_optimized.h"
 #include "inc_rp_optimized.cl"
 #include "inc_simd.cl"
+#include "inc_hash_md5.cl"
+#endif
 
-__kernel void m02400_m04 (KERN_ATTR_RULES ())
+KERNEL_FQ void m02400_m04 (KERN_ATTR_RULES ())
 {
   /**
    * modifier
@@ -55,7 +57,7 @@ __kernel void m02400_m04 (KERN_ATTR_RULES ())
     u32x w2[4] = { 0 };
     u32x w3[4] = { 0 };
 
-    const u32x out_len = apply_rules_vect (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
+    const u32x out_len = apply_rules_vect_optimized (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
 
     if (out_len <= 16)
     {
@@ -175,15 +177,15 @@ __kernel void m02400_m04 (KERN_ATTR_RULES ())
   }
 }
 
-__kernel void m02400_m08 (KERN_ATTR_RULES ())
+KERNEL_FQ void m02400_m08 (KERN_ATTR_RULES ())
 {
 }
 
-__kernel void m02400_m16 (KERN_ATTR_RULES ())
+KERNEL_FQ void m02400_m16 (KERN_ATTR_RULES ())
 {
 }
 
-__kernel void m02400_s04 (KERN_ATTR_RULES ())
+KERNEL_FQ void m02400_s04 (KERN_ATTR_RULES ())
 {
   /**
    * modifier
@@ -219,10 +221,10 @@ __kernel void m02400_s04 (KERN_ATTR_RULES ())
 
   const u32 search[4] =
   {
-    digests_buf[digests_offset].digest_buf[DGST_R0],
-    digests_buf[digests_offset].digest_buf[DGST_R1],
-    digests_buf[digests_offset].digest_buf[DGST_R2],
-    digests_buf[digests_offset].digest_buf[DGST_R3]
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R0],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R1],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R2],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R3]
   };
 
   /**
@@ -236,7 +238,7 @@ __kernel void m02400_s04 (KERN_ATTR_RULES ())
     u32x w2[4] = { 0 };
     u32x w3[4] = { 0 };
 
-    const u32x out_len = apply_rules_vect (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
+    const u32x out_len = apply_rules_vect_optimized (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
 
     if (out_len <= 16)
     {
@@ -359,10 +361,10 @@ __kernel void m02400_s04 (KERN_ATTR_RULES ())
   }
 }
 
-__kernel void m02400_s08 (KERN_ATTR_RULES ())
+KERNEL_FQ void m02400_s08 (KERN_ATTR_RULES ())
 {
 }
 
-__kernel void m02400_s16 (KERN_ATTR_RULES ())
+KERNEL_FQ void m02400_s16 (KERN_ATTR_RULES ())
 {
 }

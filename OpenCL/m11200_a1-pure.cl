@@ -5,15 +5,16 @@
 
 //#define NEW_SIMD_CODE
 
-#include "inc_vendor.cl"
-#include "inc_hash_constants.h"
-#include "inc_hash_functions.cl"
-#include "inc_types.cl"
+#ifdef KERNEL_STATIC
+#include "inc_vendor.h"
+#include "inc_types.h"
+#include "inc_platform.cl"
 #include "inc_common.cl"
 #include "inc_scalar.cl"
 #include "inc_hash_sha1.cl"
+#endif
 
-__kernel void m11200_mxx (KERN_ATTR_BASIC ())
+KERNEL_FQ void m11200_mxx (KERN_ATTR_BASIC ())
 {
   /**
    * modifier
@@ -32,13 +33,13 @@ __kernel void m11200_mxx (KERN_ATTR_BASIC ())
 
   sha1_init (&ctx0);
 
-  sha1_update_global_swap (&ctx0, salt_bufs[salt_pos].salt_buf, salt_bufs[salt_pos].salt_len);
+  sha1_update_global_swap (&ctx0, salt_bufs[SALT_POS].salt_buf, salt_bufs[SALT_POS].salt_len);
 
   sha1_ctx_t ctx2l;
 
   sha1_init (&ctx2l);
 
-  sha1_update_global_swap (&ctx2l, pws[gid].i, pws[gid].pw_len & 255);
+  sha1_update_global_swap (&ctx2l, pws[gid].i, pws[gid].pw_len);
 
   /**
    * loop
@@ -48,7 +49,7 @@ __kernel void m11200_mxx (KERN_ATTR_BASIC ())
   {
     sha1_ctx_t ctx2 = ctx2l;
 
-    sha1_update_global_swap (&ctx2, combs_buf[il_pos].i, combs_buf[il_pos].pw_len & 255);
+    sha1_update_global_swap (&ctx2, combs_buf[il_pos].i, combs_buf[il_pos].pw_len);
 
     sha1_final (&ctx2);
 
@@ -127,7 +128,7 @@ __kernel void m11200_mxx (KERN_ATTR_BASIC ())
   }
 }
 
-__kernel void m11200_sxx (KERN_ATTR_BASIC ())
+KERNEL_FQ void m11200_sxx (KERN_ATTR_BASIC ())
 {
   /**
    * modifier
@@ -144,10 +145,10 @@ __kernel void m11200_sxx (KERN_ATTR_BASIC ())
 
   const u32 search[4] =
   {
-    digests_buf[digests_offset].digest_buf[DGST_R0],
-    digests_buf[digests_offset].digest_buf[DGST_R1],
-    digests_buf[digests_offset].digest_buf[DGST_R2],
-    digests_buf[digests_offset].digest_buf[DGST_R3]
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R0],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R1],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R2],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R3]
   };
 
   /**
@@ -158,13 +159,13 @@ __kernel void m11200_sxx (KERN_ATTR_BASIC ())
 
   sha1_init (&ctx0);
 
-  sha1_update_global_swap (&ctx0, salt_bufs[salt_pos].salt_buf, salt_bufs[salt_pos].salt_len);
+  sha1_update_global_swap (&ctx0, salt_bufs[SALT_POS].salt_buf, salt_bufs[SALT_POS].salt_len);
 
   sha1_ctx_t ctx2l;
 
   sha1_init (&ctx2l);
 
-  sha1_update_global_swap (&ctx2l, pws[gid].i, pws[gid].pw_len & 255);
+  sha1_update_global_swap (&ctx2l, pws[gid].i, pws[gid].pw_len);
 
   /**
    * loop
@@ -174,7 +175,7 @@ __kernel void m11200_sxx (KERN_ATTR_BASIC ())
   {
     sha1_ctx_t ctx2 = ctx2l;
 
-    sha1_update_global_swap (&ctx2, combs_buf[il_pos].i, combs_buf[il_pos].pw_len & 255);
+    sha1_update_global_swap (&ctx2, combs_buf[il_pos].i, combs_buf[il_pos].pw_len);
 
     sha1_final (&ctx2);
 

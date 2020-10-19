@@ -5,15 +5,25 @@
 
 //#define NEW_SIMD_CODE
 
-#include "inc_vendor.cl"
-#include "inc_hash_constants.h"
-#include "inc_hash_functions.cl"
-#include "inc_types.cl"
+#ifdef KERNEL_STATIC
+#include "inc_vendor.h"
+#include "inc_types.h"
+#include "inc_platform.cl"
 #include "inc_common.cl"
 #include "inc_simd.cl"
 #include "inc_hash_sha512.cl"
+#endif
 
-__kernel void m16513_mxx (KERN_ATTR_VECTOR_ESALT (jwt_t))
+typedef struct jwt
+{
+  u32 salt_buf[1024];
+  u32 salt_len;
+
+  u32 signature_len;
+
+} jwt_t;
+
+KERNEL_FQ void m16513_mxx (KERN_ATTR_VECTOR_ESALT (jwt_t))
 {
   /**
    * modifier
@@ -28,11 +38,11 @@ __kernel void m16513_mxx (KERN_ATTR_VECTOR_ESALT (jwt_t))
    * base
    */
 
-  const u32 pw_len = pws[gid].pw_len & 255;
+  const u32 pw_len = pws[gid].pw_len;
 
   u32x w[64] = { 0 };
 
-  for (int i = 0, idx = 0; i < pw_len; i += 4, idx += 1)
+  for (u32 i = 0, idx = 0; i < pw_len; i += 4, idx += 1)
   {
     w[idx] = pws[gid].i[idx];
   }
@@ -55,7 +65,7 @@ __kernel void m16513_mxx (KERN_ATTR_VECTOR_ESALT (jwt_t))
 
     sha512_hmac_init (&ctx, w, pw_len);
 
-    sha512_hmac_update_global_swap (&ctx, esalt_bufs[digests_offset].salt_buf, esalt_bufs[digests_offset].salt_len);
+    sha512_hmac_update_global_swap (&ctx, esalt_bufs[DIGESTS_OFFSET].salt_buf, esalt_bufs[DIGESTS_OFFSET].salt_len);
 
     sha512_hmac_final (&ctx);
 
@@ -68,7 +78,7 @@ __kernel void m16513_mxx (KERN_ATTR_VECTOR_ESALT (jwt_t))
   }
 }
 
-__kernel void m16513_sxx (KERN_ATTR_VECTOR_ESALT (jwt_t))
+KERNEL_FQ void m16513_sxx (KERN_ATTR_VECTOR_ESALT (jwt_t))
 {
   /**
    * modifier
@@ -85,21 +95,21 @@ __kernel void m16513_sxx (KERN_ATTR_VECTOR_ESALT (jwt_t))
 
   const u32 search[4] =
   {
-    digests_buf[digests_offset].digest_buf[DGST_R0],
-    digests_buf[digests_offset].digest_buf[DGST_R1],
-    digests_buf[digests_offset].digest_buf[DGST_R2],
-    digests_buf[digests_offset].digest_buf[DGST_R3]
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R0],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R1],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R2],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R3]
   };
 
   /**
    * base
    */
 
-  const u32 pw_len = pws[gid].pw_len & 255;
+  const u32 pw_len = pws[gid].pw_len;
 
   u32x w[64] = { 0 };
 
-  for (int i = 0, idx = 0; i < pw_len; i += 4, idx += 1)
+  for (u32 i = 0, idx = 0; i < pw_len; i += 4, idx += 1)
   {
     w[idx] = pws[gid].i[idx];
   }
@@ -122,7 +132,7 @@ __kernel void m16513_sxx (KERN_ATTR_VECTOR_ESALT (jwt_t))
 
     sha512_hmac_init (&ctx, w, pw_len);
 
-    sha512_hmac_update_global_swap (&ctx, esalt_bufs[digests_offset].salt_buf, esalt_bufs[digests_offset].salt_len);
+    sha512_hmac_update_global_swap (&ctx, esalt_bufs[DIGESTS_OFFSET].salt_buf, esalt_bufs[DIGESTS_OFFSET].salt_len);
 
     sha512_hmac_final (&ctx);
 

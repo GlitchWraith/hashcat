@@ -5,16 +5,18 @@
 
 //#define NEW_SIMD_CODE
 
-#include "inc_vendor.cl"
-#include "inc_hash_constants.h"
-#include "inc_hash_functions.cl"
-#include "inc_types.cl"
+#ifdef KERNEL_STATIC
+#include "inc_vendor.h"
+#include "inc_types.h"
+#include "inc_platform.cl"
 #include "inc_common.cl"
 #include "inc_rp_optimized.h"
 #include "inc_rp_optimized.cl"
 #include "inc_simd.cl"
+#include "inc_hash_md5.cl"
+#endif
 
-__kernel void m02410_m04 (KERN_ATTR_RULES ())
+KERNEL_FQ void m02410_m04 (KERN_ATTR_RULES ())
 {
   /**
    * modifier
@@ -53,7 +55,7 @@ __kernel void m02410_m04 (KERN_ATTR_RULES ())
   u32 salt_buf2[4];
   u32 salt_buf3[4];
 
-  salt_buf0[0] = salt_bufs[salt_pos].salt_buf[ 0];
+  salt_buf0[0] = salt_bufs[SALT_POS].salt_buf[ 0];
   salt_buf0[1] = 0;
   salt_buf0[2] = 0;
   salt_buf0[3] = 0;
@@ -70,7 +72,7 @@ __kernel void m02410_m04 (KERN_ATTR_RULES ())
   salt_buf3[2] = 0;
   salt_buf3[3] = 0;
 
-  const u32 salt_len = salt_bufs[salt_pos].salt_len;
+  const u32 salt_len = salt_bufs[SALT_POS].salt_len;
 
   /**
    * loop
@@ -83,7 +85,7 @@ __kernel void m02410_m04 (KERN_ATTR_RULES ())
     u32x w2[4] = { 0 };
     u32x w3[4] = { 0 };
 
-    const u32x out_len = apply_rules_vect (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
+    const u32x out_len = apply_rules_vect_optimized (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
 
     /**
      * append salt
@@ -254,15 +256,15 @@ __kernel void m02410_m04 (KERN_ATTR_RULES ())
   }
 }
 
-__kernel void m02410_m08 (KERN_ATTR_RULES ())
+KERNEL_FQ void m02410_m08 (KERN_ATTR_RULES ())
 {
 }
 
-__kernel void m02410_m16 (KERN_ATTR_RULES ())
+KERNEL_FQ void m02410_m16 (KERN_ATTR_RULES ())
 {
 }
 
-__kernel void m02410_s04 (KERN_ATTR_RULES ())
+KERNEL_FQ void m02410_s04 (KERN_ATTR_RULES ())
 {
   /**
    * modifier
@@ -301,7 +303,7 @@ __kernel void m02410_s04 (KERN_ATTR_RULES ())
   u32 salt_buf2[4];
   u32 salt_buf3[4];
 
-  salt_buf0[0] = salt_bufs[salt_pos].salt_buf[ 0];
+  salt_buf0[0] = salt_bufs[SALT_POS].salt_buf[ 0];
   salt_buf0[1] = 0;
   salt_buf0[2] = 0;
   salt_buf0[3] = 0;
@@ -318,7 +320,7 @@ __kernel void m02410_s04 (KERN_ATTR_RULES ())
   salt_buf3[2] = 0;
   salt_buf3[3] = 0;
 
-  const u32 salt_len = salt_bufs[salt_pos].salt_len;
+  const u32 salt_len = salt_bufs[SALT_POS].salt_len;
 
   /**
    * digest
@@ -326,10 +328,10 @@ __kernel void m02410_s04 (KERN_ATTR_RULES ())
 
   const u32 search[4] =
   {
-    digests_buf[digests_offset].digest_buf[DGST_R0],
-    digests_buf[digests_offset].digest_buf[DGST_R1],
-    digests_buf[digests_offset].digest_buf[DGST_R2],
-    digests_buf[digests_offset].digest_buf[DGST_R3]
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R0],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R1],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R2],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R3]
   };
 
   /**
@@ -343,7 +345,7 @@ __kernel void m02410_s04 (KERN_ATTR_RULES ())
     u32x w2[4] = { 0 };
     u32x w3[4] = { 0 };
 
-    const u32x out_len = apply_rules_vect (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
+    const u32x out_len = apply_rules_vect_optimized (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
 
     /**
      * append salt
@@ -517,10 +519,10 @@ __kernel void m02410_s04 (KERN_ATTR_RULES ())
   }
 }
 
-__kernel void m02410_s08 (KERN_ATTR_RULES ())
+KERNEL_FQ void m02410_s08 (KERN_ATTR_RULES ())
 {
 }
 
-__kernel void m02410_s16 (KERN_ATTR_RULES ())
+KERNEL_FQ void m02410_s16 (KERN_ATTR_RULES ())
 {
 }

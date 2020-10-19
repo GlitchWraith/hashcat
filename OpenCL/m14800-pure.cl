@@ -5,15 +5,33 @@
 
 #define NEW_SIMD_CODE
 
-#include "inc_vendor.cl"
-#include "inc_hash_constants.h"
-#include "inc_hash_functions.cl"
-#include "inc_types.cl"
+#ifdef KERNEL_STATIC
+#include "inc_vendor.h"
+#include "inc_types.h"
+#include "inc_platform.cl"
 #include "inc_common.cl"
 #include "inc_simd.cl"
 #include "inc_hash_sha1.cl"
 #include "inc_hash_sha256.cl"
 #include "inc_cipher_aes.cl"
+#endif
+
+typedef struct itunes_backup
+{
+  u32 wpky[10];
+  u32 dpsl[5];
+
+} itunes_backup_t;
+
+typedef struct pbkdf2_sha256_tmp
+{
+  u32  ipad[8];
+  u32  opad[8];
+
+  u32  dgst[32];
+  u32  out[32];
+
+} pbkdf2_sha256_tmp_t;
 
 DECLSPEC void hmac_sha1_run_V (u32x *w0, u32x *w1, u32x *w2, u32x *w3, u32x *ipad, u32x *opad, u32x *digest)
 {
@@ -93,7 +111,7 @@ DECLSPEC void hmac_sha256_run_V (u32x *w0, u32x *w1, u32x *w2, u32x *w3, u32x *i
   sha256_transform_vector (w0, w1, w2, w3, digest);
 }
 
-__kernel void m14800_init (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, itunes_backup_t))
+KERNEL_FQ void m14800_init (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, itunes_backup_t))
 {
   /**
    * base
@@ -105,7 +123,7 @@ __kernel void m14800_init (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, itunes_bac
 
   sha256_hmac_ctx_t sha256_hmac_ctx;
 
-  sha256_hmac_init_global_swap (&sha256_hmac_ctx, pws[gid].i, pws[gid].pw_len & 255);
+  sha256_hmac_init_global_swap (&sha256_hmac_ctx, pws[gid].i, pws[gid].pw_len);
 
   tmps[gid].ipad[0] = sha256_hmac_ctx.ipad.h[0];
   tmps[gid].ipad[1] = sha256_hmac_ctx.ipad.h[1];
@@ -130,11 +148,11 @@ __kernel void m14800_init (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, itunes_bac
   u32 w2[4];
   u32 w3[4];
 
-  w0[0] = esalt_bufs[digests_offset].dpsl[0];
-  w0[1] = esalt_bufs[digests_offset].dpsl[1];
-  w0[2] = esalt_bufs[digests_offset].dpsl[2];
-  w0[3] = esalt_bufs[digests_offset].dpsl[3];
-  w1[0] = esalt_bufs[digests_offset].dpsl[4];
+  w0[0] = esalt_bufs[DIGESTS_OFFSET].dpsl[0];
+  w0[1] = esalt_bufs[DIGESTS_OFFSET].dpsl[1];
+  w0[2] = esalt_bufs[DIGESTS_OFFSET].dpsl[2];
+  w0[3] = esalt_bufs[DIGESTS_OFFSET].dpsl[3];
+  w1[0] = esalt_bufs[DIGESTS_OFFSET].dpsl[4];
   w1[1] = 0;
   w1[2] = 0;
   w1[3] = 0;
@@ -194,7 +212,7 @@ __kernel void m14800_init (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, itunes_bac
   }
 }
 
-__kernel void m14800_loop (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, itunes_backup_t))
+KERNEL_FQ void m14800_loop (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, itunes_backup_t))
 {
   const u64 gid = get_global_id (0);
 
@@ -300,7 +318,7 @@ __kernel void m14800_loop (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, itunes_bac
   }
 }
 
-__kernel void m14800_init2 (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, itunes_backup_t))
+KERNEL_FQ void m14800_init2 (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, itunes_backup_t))
 {
   /**
    * base
@@ -348,7 +366,7 @@ __kernel void m14800_init2 (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, itunes_ba
   tmps[gid].opad[3] = sha1_hmac_ctx.opad.h[3];
   tmps[gid].opad[4] = sha1_hmac_ctx.opad.h[4];
 
-  sha1_hmac_update_global (&sha1_hmac_ctx, salt_bufs[salt_pos].salt_buf, salt_bufs[salt_pos].salt_len);
+  sha1_hmac_update_global (&sha1_hmac_ctx, salt_bufs[SALT_POS].salt_buf, salt_bufs[SALT_POS].salt_len);
 
   for (u32 i = 0, j = 1; i < 8; i += 5, j += 1)
   {
@@ -389,7 +407,7 @@ __kernel void m14800_init2 (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, itunes_ba
   }
 }
 
-__kernel void m14800_loop2 (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, itunes_backup_t))
+KERNEL_FQ void m14800_loop2 (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, itunes_backup_t))
 {
   const u64 gid = get_global_id (0);
 
@@ -474,7 +492,7 @@ __kernel void m14800_loop2 (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, itunes_ba
   }
 }
 
-__kernel void m14800_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, itunes_backup_t))
+KERNEL_FQ void m14800_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, itunes_backup_t))
 {
   const u64 gid = get_global_id (0);
   const u64 lid = get_local_id (0);
@@ -486,19 +504,19 @@ __kernel void m14800_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, itunes_bac
 
   #ifdef REAL_SHM
 
-  __local u32 s_td0[256];
-  __local u32 s_td1[256];
-  __local u32 s_td2[256];
-  __local u32 s_td3[256];
-  __local u32 s_td4[256];
+  LOCAL_VK u32 s_td0[256];
+  LOCAL_VK u32 s_td1[256];
+  LOCAL_VK u32 s_td2[256];
+  LOCAL_VK u32 s_td3[256];
+  LOCAL_VK u32 s_td4[256];
 
-  __local u32 s_te0[256];
-  __local u32 s_te1[256];
-  __local u32 s_te2[256];
-  __local u32 s_te3[256];
-  __local u32 s_te4[256];
+  LOCAL_VK u32 s_te0[256];
+  LOCAL_VK u32 s_te1[256];
+  LOCAL_VK u32 s_te2[256];
+  LOCAL_VK u32 s_te3[256];
+  LOCAL_VK u32 s_te4[256];
 
-  for (MAYBE_VOLATILE u32 i = lid; i < 256; i += lsz)
+  for (u32 i = lid; i < 256; i += lsz)
   {
     s_td0[i] = td0[i];
     s_td1[i] = td1[i];
@@ -513,21 +531,21 @@ __kernel void m14800_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, itunes_bac
     s_te4[i] = te4[i];
   }
 
-  barrier (CLK_LOCAL_MEM_FENCE);
+  SYNC_THREADS ();
 
   #else
 
-  __constant u32a *s_td0 = td0;
-  __constant u32a *s_td1 = td1;
-  __constant u32a *s_td2 = td2;
-  __constant u32a *s_td3 = td3;
-  __constant u32a *s_td4 = td4;
+  CONSTANT_AS u32a *s_td0 = td0;
+  CONSTANT_AS u32a *s_td1 = td1;
+  CONSTANT_AS u32a *s_td2 = td2;
+  CONSTANT_AS u32a *s_td3 = td3;
+  CONSTANT_AS u32a *s_td4 = td4;
 
-  __constant u32a *s_te0 = te0;
-  __constant u32a *s_te1 = te1;
-  __constant u32a *s_te2 = te2;
-  __constant u32a *s_te3 = te3;
-  __constant u32a *s_te4 = te4;
+  CONSTANT_AS u32a *s_te0 = te0;
+  CONSTANT_AS u32a *s_te1 = te1;
+  CONSTANT_AS u32a *s_te2 = te2;
+  CONSTANT_AS u32a *s_te3 = te3;
+  CONSTANT_AS u32a *s_te4 = te4;
 
   #endif
 
@@ -552,25 +570,25 @@ __kernel void m14800_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, itunes_bac
 
   u32 ks[KEYLEN];
 
-  AES256_set_decrypt_key (ks, ukey, s_te0, s_te1, s_te2, s_te3, s_te4, s_td0, s_td1, s_td2, s_td3, s_td4);
+  AES256_set_decrypt_key (ks, ukey, s_te0, s_te1, s_te2, s_te3, s_td0, s_td1, s_td2, s_td3);
 
   u32 cipher[4];
 
-  cipher[0] = esalt_bufs[digests_offset].wpky[0];
-  cipher[1] = esalt_bufs[digests_offset].wpky[1];
+  cipher[0] = esalt_bufs[DIGESTS_OFFSET].wpky[0];
+  cipher[1] = esalt_bufs[DIGESTS_OFFSET].wpky[1];
   cipher[2] = 0;
   cipher[3] = 0;
 
   u32 lsb[8];
 
-  lsb[0] = esalt_bufs[digests_offset].wpky[8];
-  lsb[1] = esalt_bufs[digests_offset].wpky[9];
-  lsb[2] = esalt_bufs[digests_offset].wpky[6];
-  lsb[3] = esalt_bufs[digests_offset].wpky[7];
-  lsb[4] = esalt_bufs[digests_offset].wpky[4];
-  lsb[5] = esalt_bufs[digests_offset].wpky[5];
-  lsb[6] = esalt_bufs[digests_offset].wpky[2];
-  lsb[7] = esalt_bufs[digests_offset].wpky[3];
+  lsb[0] = esalt_bufs[DIGESTS_OFFSET].wpky[8];
+  lsb[1] = esalt_bufs[DIGESTS_OFFSET].wpky[9];
+  lsb[2] = esalt_bufs[DIGESTS_OFFSET].wpky[6];
+  lsb[3] = esalt_bufs[DIGESTS_OFFSET].wpky[7];
+  lsb[4] = esalt_bufs[DIGESTS_OFFSET].wpky[4];
+  lsb[5] = esalt_bufs[DIGESTS_OFFSET].wpky[5];
+  lsb[6] = esalt_bufs[DIGESTS_OFFSET].wpky[2];
+  lsb[7] = esalt_bufs[DIGESTS_OFFSET].wpky[3];
 
   for (int j = 5; j >= 0; j--)
   {
@@ -625,9 +643,9 @@ __kernel void m14800_comp (KERN_ATTR_TMPS_ESALT (pbkdf2_sha256_tmp_t, itunes_bac
 
   if ((cipher[0] == 0xa6a6a6a6) && (cipher[1] == 0xa6a6a6a6))
   {
-    if (atomic_inc (&hashes_shown[digests_offset]) == 0)
+    if (atomic_inc (&hashes_shown[DIGESTS_OFFSET]) == 0)
     {
-      mark_hash (plains_buf, d_return_buf, salt_pos, digests_cnt, 0, digests_offset + 0, gid, 0);
+      mark_hash (plains_buf, d_return_buf, SALT_POS, digests_cnt, 0, DIGESTS_OFFSET + 0, gid, 0, 0, 0);
     }
 
     return;

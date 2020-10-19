@@ -5,30 +5,40 @@
 
 #define NEW_SIMD_CODE
 
-#include "inc_vendor.cl"
-#include "inc_hash_constants.h"
-#include "inc_hash_functions.cl"
-#include "inc_types.cl"
+#ifdef KERNEL_STATIC
+#include "inc_vendor.h"
+#include "inc_types.h"
+#include "inc_platform.cl"
 #include "inc_common.cl"
 #include "inc_rp_optimized.h"
 #include "inc_rp_optimized.cl"
 #include "inc_simd.cl"
+#endif
+
+typedef struct chacha20
+{
+  u32 iv[2];
+  u32 plain[2];
+  u32 position[2];
+  u32 offset;
+
+} chacha20_t;
 
 #define CHACHA_CONST_00 0x61707865
 #define CHACHA_CONST_01 0x3320646e
 #define CHACHA_CONST_02 0x79622d32
 #define CHACHA_CONST_03 0x6b206574
 
-#define QR(a, b, c, d)                \
-  do {                                \
-    x[a] = x[a] + x[b];               \
-    x[d] = rotl32(x[d] ^ x[a], 16);   \
-    x[c] = x[c] + x[d];               \
-    x[b] = rotl32(x[b] ^ x[c], 12);   \
-    x[a] = x[a] + x[b];               \
-    x[d] = rotl32(x[d] ^ x[a], 8);    \
-    x[c] = x[c] + x[d];               \
-    x[b] = rotl32(x[b] ^ x[c], 7);    \
+#define QR(a, b, c, d)                  \
+  do {                                  \
+    x[a] = x[a] + x[b];                 \
+    x[d] = hc_rotl32 (x[d] ^ x[a], 16); \
+    x[c] = x[c] + x[ d];                \
+    x[b] = hc_rotl32 (x[b] ^ x[c], 12); \
+    x[a] = x[a] + x[ b];                \
+    x[d] = hc_rotl32 (x[d] ^ x[a], 8);  \
+    x[c] = x[c] + x[ d];                \
+    x[b] = hc_rotl32 (x[b] ^ x[c], 7);  \
   } while (0);
 
 DECLSPEC void chacha20_transform (const u32x *w0, const u32x *w1, const u32 *position, const u32 offset, const u32 *iv, const u32 *plain, u32x *digest)
@@ -83,16 +93,16 @@ DECLSPEC void chacha20_transform (const u32x *w0, const u32x *w1, const u32 *pos
   for (u8 i = 0; i < 10; i++)
   {
     /* Column round */
-    QR(0, 4, 8,  12);
-    QR(1, 5, 9,  13);
-    QR(2, 6, 10, 14);
-    QR(3, 7, 11, 15);
+    QR (0, 4, 8,  12);
+    QR (1, 5, 9,  13);
+    QR (2, 6, 10, 14);
+    QR (3, 7, 11, 15);
 
     /* Diagonal round */
-    QR(0, 5, 10, 15);
-    QR(1, 6, 11, 12);
-    QR(2, 7, 8,  13);
-    QR(3, 4, 9,  14);
+    QR (0, 5, 10, 15);
+    QR (1, 6, 11, 12);
+    QR (2, 7, 8,  13);
+    QR (3, 4, 9,  14);
   }
 
   x[ 0] += ctx[ 0];
@@ -118,9 +128,39 @@ DECLSPEC void chacha20_transform (const u32x *w0, const u32x *w1, const u32 *pos
      * Generate a second 64 byte keystream
      */
 
-    ctx[12]++;
+    ctx[12] += 1;
 
-    if (all(ctx[12] == 0)) ctx[13]++;
+    #if VECT_SIZE == 1
+    if (ctx[12] == 0) ctx[13] += 1;
+    #endif
+
+    #if VECT_SIZE >= 2
+    if (ctx[12].s0 == 0) ctx[13].s0 += 1;
+    if (ctx[12].s1 == 0) ctx[13].s1 += 1;
+    #endif
+
+    #if VECT_SIZE >= 4
+    if (ctx[12].s2 == 0) ctx[13].s2 += 1;
+    if (ctx[12].s3 == 0) ctx[13].s3 += 1;
+    #endif
+
+    #if VECT_SIZE >= 8
+    if (ctx[12].s4 == 0) ctx[13].s4 += 1;
+    if (ctx[12].s5 == 0) ctx[13].s5 += 1;
+    if (ctx[12].s6 == 0) ctx[13].s6 += 1;
+    if (ctx[12].s7 == 0) ctx[13].s7 += 1;
+    #endif
+
+    #if VECT_SIZE >= 16
+    if (ctx[12].s8 == 0) ctx[13].s8 += 1;
+    if (ctx[12].s9 == 0) ctx[13].s9 += 1;
+    if (ctx[12].sa == 0) ctx[13].sa += 1;
+    if (ctx[12].sb == 0) ctx[13].sb += 1;
+    if (ctx[12].sc == 0) ctx[13].sc += 1;
+    if (ctx[12].sd == 0) ctx[13].sd += 1;
+    if (ctx[12].se == 0) ctx[13].se += 1;
+    if (ctx[12].sf == 0) ctx[13].sf += 1;
+    #endif
 
     x[16] = ctx[ 0];
     x[17] = ctx[ 1];
@@ -143,16 +183,16 @@ DECLSPEC void chacha20_transform (const u32x *w0, const u32x *w1, const u32 *pos
     for (u8 i = 0; i < 10; i++)
     {
       /* Column round */
-      QR(16, 20, 24, 28);
-      QR(17, 21, 25, 29);
-      QR(18, 22, 26, 30);
-      QR(19, 23, 27, 31);
+      QR (16, 20, 24, 28);
+      QR (17, 21, 25, 29);
+      QR (18, 22, 26, 30);
+      QR (19, 23, 27, 31);
 
       /* Diagonal round */
-      QR(16, 21, 26, 31);
-      QR(17, 22, 27, 28);
-      QR(18, 23, 24, 29);
-      QR(19, 20, 25, 30);
+      QR (16, 21, 26, 31);
+      QR (17, 22, 27, 28);
+      QR (18, 23, 24, 29);
+      QR (19, 20, 25, 30);
     }
 
     x[16] += ctx[ 0];
@@ -198,82 +238,7 @@ DECLSPEC void chacha20_transform (const u32x *w0, const u32x *w1, const u32 *pos
   }
 }
 
-__kernel void m15400_m04 (KERN_ATTR_RULES_ESALT (chacha20_t))
-{
-  /**
-   * modifier
-   */
-
-  const u64 gid = get_global_id (0);
-  const u64 lid = get_local_id (0);
-
-  u32 pw_buf0[4];
-  u32 pw_buf1[4];
-
-  pw_buf0[0] = pws[gid].i[0];
-  pw_buf0[1] = pws[gid].i[1];
-  pw_buf0[2] = pws[gid].i[2];
-  pw_buf0[3] = pws[gid].i[3];
-  pw_buf1[0] = pws[gid].i[4];
-  pw_buf1[1] = pws[gid].i[5];
-  pw_buf1[2] = pws[gid].i[6];
-  pw_buf1[3] = pws[gid].i[7];
-
-  const u32 pw_len = pws[gid].pw_len & 63;
-
-  /**
-   * Salt prep
-   */
-
-  u32 iv[2]       = { 0 };
-  u32 plain[2]    = { 0 };
-  u32 position[2] = { 0 };
-  u32 offset      = 0;
-
-  position[0] = esalt_bufs[digests_offset].position[0];
-  position[1] = esalt_bufs[digests_offset].position[1];
-
-  offset = esalt_bufs[digests_offset].offset;
-
-  iv[0] = esalt_bufs[digests_offset].iv[0];
-  iv[1] = esalt_bufs[digests_offset].iv[1];
-
-  plain[0] = esalt_bufs[digests_offset].plain[0];
-  plain[1] = esalt_bufs[digests_offset].plain[1];
-
-  /**
-   * loop
-   */
-
-  for (u32 il_pos = 0; il_pos < il_cnt; il_pos += VECT_SIZE)
-  {
-    u32x w0[4] = { 0 };
-    u32x w1[4] = { 0 };
-
-    const u32x out_len = apply_rules_vect(pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
-
-    u32x digest[4] = { 0 };
-
-    chacha20_transform (w0, w1, position, offset, iv, plain, digest);
-
-    const u32x r0 = digest[0];
-    const u32x r1 = digest[1];
-    const u32x r2 = digest[2];
-    const u32x r3 = digest[3];
-
-    COMPARE_M_SIMD(r0, r1, r2, r3);
-  }
-}
-
-__kernel void m15400_m08 (KERN_ATTR_RULES_ESALT (chacha20_t))
-{
-}
-
-__kernel void m15400_m16 (KERN_ATTR_RULES_ESALT (chacha20_t))
-{
-}
-
-__kernel void m15400_s04 (KERN_ATTR_RULES_ESALT (chacha20_t))
+KERNEL_FQ void m15400_m04 (KERN_ATTR_RULES_ESALT (chacha20_t))
 {
   /**
    * modifier
@@ -308,16 +273,94 @@ __kernel void m15400_s04 (KERN_ATTR_RULES_ESALT (chacha20_t))
   u32 position[2] = { 0 };
   u32 offset      = 0;
 
-  position[0] = esalt_bufs[digests_offset].position[0];
-  position[1] = esalt_bufs[digests_offset].position[1];
+  position[0] = esalt_bufs[DIGESTS_OFFSET].position[0];
+  position[1] = esalt_bufs[DIGESTS_OFFSET].position[1];
 
-  offset = esalt_bufs[digests_offset].offset;
+  offset = esalt_bufs[DIGESTS_OFFSET].offset;
 
-  iv[0] = esalt_bufs[digests_offset].iv[0];
-  iv[1] = esalt_bufs[digests_offset].iv[1];
+  iv[0] = esalt_bufs[DIGESTS_OFFSET].iv[0];
+  iv[1] = esalt_bufs[DIGESTS_OFFSET].iv[1];
 
-  plain[0] = esalt_bufs[digests_offset].plain[0];
-  plain[1] = esalt_bufs[digests_offset].plain[1];
+  plain[0] = esalt_bufs[DIGESTS_OFFSET].plain[0];
+  plain[1] = esalt_bufs[DIGESTS_OFFSET].plain[1];
+
+  /**
+   * loop
+   */
+
+  for (u32 il_pos = 0; il_pos < il_cnt; il_pos += VECT_SIZE)
+  {
+    u32x w0[4] = { 0 };
+    u32x w1[4] = { 0 };
+
+    const u32x out_len = apply_rules_vect_optimized (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
+
+    u32x digest[4] = { 0 };
+
+    chacha20_transform (w0, w1, position, offset, iv, plain, digest);
+
+    const u32x r0 = digest[0];
+    const u32x r1 = digest[1];
+    const u32x r2 = digest[2];
+    const u32x r3 = digest[3];
+
+    COMPARE_M_SIMD (r0, r1, r2, r3);
+  }
+}
+
+KERNEL_FQ void m15400_m08 (KERN_ATTR_RULES_ESALT (chacha20_t))
+{
+}
+
+KERNEL_FQ void m15400_m16 (KERN_ATTR_RULES_ESALT (chacha20_t))
+{
+}
+
+KERNEL_FQ void m15400_s04 (KERN_ATTR_RULES_ESALT (chacha20_t))
+{
+  /**
+   * modifier
+   */
+
+  const u64 lid = get_local_id (0);
+
+  const u64 gid = get_global_id (0);
+
+  if (gid >= gid_max) return;
+
+  u32 pw_buf0[4];
+  u32 pw_buf1[4];
+
+  pw_buf0[0] = pws[gid].i[0];
+  pw_buf0[1] = pws[gid].i[1];
+  pw_buf0[2] = pws[gid].i[2];
+  pw_buf0[3] = pws[gid].i[3];
+  pw_buf1[0] = pws[gid].i[4];
+  pw_buf1[1] = pws[gid].i[5];
+  pw_buf1[2] = pws[gid].i[6];
+  pw_buf1[3] = pws[gid].i[7];
+
+  const u32 pw_len = pws[gid].pw_len & 63;
+
+  /**
+   * Salt prep
+   */
+
+  u32 iv[2]       = { 0 };
+  u32 plain[2]    = { 0 };
+  u32 position[2] = { 0 };
+  u32 offset      = 0;
+
+  position[0] = esalt_bufs[DIGESTS_OFFSET].position[0];
+  position[1] = esalt_bufs[DIGESTS_OFFSET].position[1];
+
+  offset = esalt_bufs[DIGESTS_OFFSET].offset;
+
+  iv[0] = esalt_bufs[DIGESTS_OFFSET].iv[0];
+  iv[1] = esalt_bufs[DIGESTS_OFFSET].iv[1];
+
+  plain[0] = esalt_bufs[DIGESTS_OFFSET].plain[0];
+  plain[1] = esalt_bufs[DIGESTS_OFFSET].plain[1];
 
   /**
    * digest
@@ -325,10 +368,10 @@ __kernel void m15400_s04 (KERN_ATTR_RULES_ESALT (chacha20_t))
 
   const u32 search[4] =
   {
-    digests_buf[digests_offset].digest_buf[DGST_R0],
-    digests_buf[digests_offset].digest_buf[DGST_R1],
-    digests_buf[digests_offset].digest_buf[DGST_R2],
-    digests_buf[digests_offset].digest_buf[DGST_R3]
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R0],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R1],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R2],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R3]
   };
 
   /**
@@ -340,7 +383,7 @@ __kernel void m15400_s04 (KERN_ATTR_RULES_ESALT (chacha20_t))
     u32x w0[4] = { 0 };
     u32x w1[4] = { 0 };
 
-    const u32x out_len = apply_rules_vect(pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
+    const u32x out_len = apply_rules_vect_optimized (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
 
     u32x digest[4] = { 0 };
 
@@ -351,14 +394,14 @@ __kernel void m15400_s04 (KERN_ATTR_RULES_ESALT (chacha20_t))
     const u32x r2 = digest[2];
     const u32x r3 = digest[3];
 
-    COMPARE_S_SIMD(r0, r1, r2, r3);
+    COMPARE_S_SIMD (r0, r1, r2, r3);
   }
 }
 
-__kernel void m15400_s08 (KERN_ATTR_RULES_ESALT (chacha20_t))
+KERNEL_FQ void m15400_s08 (KERN_ATTR_RULES_ESALT (chacha20_t))
 {
 }
 
-__kernel void m15400_s16 (KERN_ATTR_RULES_ESALT (chacha20_t))
+KERNEL_FQ void m15400_s16 (KERN_ATTR_RULES_ESALT (chacha20_t))
 {
 }

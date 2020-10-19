@@ -6,15 +6,26 @@
 //shared mem too small
 //#define NEW_SIMD_CODE
 
-#include "inc_vendor.cl"
-#include "inc_hash_constants.h"
-#include "inc_hash_functions.cl"
-#include "inc_types.cl"
+#ifdef KERNEL_STATIC
+#include "inc_vendor.h"
+#include "inc_types.h"
+#include "inc_platform.cl"
 #include "inc_common.cl"
 #include "inc_rp.h"
 #include "inc_rp.cl"
 #include "inc_hash_md4.cl"
 #include "inc_hash_md5.cl"
+#endif
+
+typedef struct krb5pa
+{
+  u32 user[16];
+  u32 realm[16];
+  u32 salt[32];
+  u32 timestamp[16];
+  u32 checksum[4];
+
+} krb5pa_t;
 
 typedef struct
 {
@@ -24,7 +35,7 @@ typedef struct
 
 } RC4_KEY;
 
-DECLSPEC void swap (__local RC4_KEY *rc4_key, const u8 i, const u8 j)
+DECLSPEC void swap (LOCAL_AS RC4_KEY *rc4_key, const u8 i, const u8 j)
 {
   u8 tmp;
 
@@ -33,12 +44,12 @@ DECLSPEC void swap (__local RC4_KEY *rc4_key, const u8 i, const u8 j)
   rc4_key->S[j] = tmp;
 }
 
-DECLSPEC void rc4_init_16 (__local RC4_KEY *rc4_key, const u32 *data)
+DECLSPEC void rc4_init_16 (LOCAL_AS RC4_KEY *rc4_key, const u32 *data)
 {
   u32 v = 0x03020100;
   u32 a = 0x04040404;
 
-  __local u32 *ptr = (__local u32 *) rc4_key->S;
+  LOCAL_AS u32 *ptr = (LOCAL_AS u32 *) rc4_key->S;
 
   #ifdef _unroll
   #pragma unroll
@@ -86,7 +97,7 @@ DECLSPEC void rc4_init_16 (__local RC4_KEY *rc4_key, const u32 *data)
   }
 }
 
-DECLSPEC u8 rc4_next_16 (__local RC4_KEY *rc4_key, u8 i, u8 j, const u32 *in, u32 *out)
+DECLSPEC u8 rc4_next_16 (LOCAL_AS RC4_KEY *rc4_key, u8 i, u8 j, const u32 *in, u32 *out)
 {
   #ifdef _unroll
   #pragma unroll
@@ -139,7 +150,7 @@ DECLSPEC u8 rc4_next_16 (__local RC4_KEY *rc4_key, u8 i, u8 j, const u32 *in, u3
   return j;
 }
 
-DECLSPEC int decrypt_and_check (__local RC4_KEY *rc4_key, u32 *data, u32 *timestamp_ct)
+DECLSPEC int decrypt_and_check (LOCAL_AS RC4_KEY *rc4_key, u32 *data, u32 *timestamp_ct)
 {
   rc4_init_16 (rc4_key, data);
 
@@ -268,7 +279,7 @@ DECLSPEC void kerb_prepare (const u32 *K, const u32 *checksum, u32 *digest)
   digest[3] = ctx.opad.h[3];
 }
 
-__kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m07500_mxx (KERN_ATTR_RULES_ESALT (krb5pa_t))
+KERNEL_FQ void m07500_mxx (KERN_ATTR_RULES_ESALT (krb5pa_t))
 {
   /**
    * modifier
@@ -285,27 +296,27 @@ __kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m07500_mxx (KERN_A
 
   COPY_PW (pws[gid]);
 
-  __local RC4_KEY rc4_keys[64];
+  LOCAL_VK RC4_KEY rc4_keys[64];
 
-  __local RC4_KEY *rc4_key = &rc4_keys[lid];
+  LOCAL_AS RC4_KEY *rc4_key = &rc4_keys[lid];
 
   u32 checksum[4];
 
-  checksum[0] = esalt_bufs[digests_offset].checksum[0];
-  checksum[1] = esalt_bufs[digests_offset].checksum[1];
-  checksum[2] = esalt_bufs[digests_offset].checksum[2];
-  checksum[3] = esalt_bufs[digests_offset].checksum[3];
+  checksum[0] = esalt_bufs[DIGESTS_OFFSET].checksum[0];
+  checksum[1] = esalt_bufs[DIGESTS_OFFSET].checksum[1];
+  checksum[2] = esalt_bufs[DIGESTS_OFFSET].checksum[2];
+  checksum[3] = esalt_bufs[DIGESTS_OFFSET].checksum[3];
 
   u32 timestamp_ct[8];
 
-  timestamp_ct[0] = esalt_bufs[digests_offset].timestamp[0];
-  timestamp_ct[1] = esalt_bufs[digests_offset].timestamp[1];
-  timestamp_ct[2] = esalt_bufs[digests_offset].timestamp[2];
-  timestamp_ct[3] = esalt_bufs[digests_offset].timestamp[3];
-  timestamp_ct[4] = esalt_bufs[digests_offset].timestamp[4];
-  timestamp_ct[5] = esalt_bufs[digests_offset].timestamp[5];
-  timestamp_ct[6] = esalt_bufs[digests_offset].timestamp[6];
-  timestamp_ct[7] = esalt_bufs[digests_offset].timestamp[7];
+  timestamp_ct[0] = esalt_bufs[DIGESTS_OFFSET].timestamp[0];
+  timestamp_ct[1] = esalt_bufs[DIGESTS_OFFSET].timestamp[1];
+  timestamp_ct[2] = esalt_bufs[DIGESTS_OFFSET].timestamp[2];
+  timestamp_ct[3] = esalt_bufs[DIGESTS_OFFSET].timestamp[3];
+  timestamp_ct[4] = esalt_bufs[DIGESTS_OFFSET].timestamp[4];
+  timestamp_ct[5] = esalt_bufs[DIGESTS_OFFSET].timestamp[5];
+  timestamp_ct[6] = esalt_bufs[DIGESTS_OFFSET].timestamp[6];
+  timestamp_ct[7] = esalt_bufs[DIGESTS_OFFSET].timestamp[7];
 
   /**
    * loop
@@ -331,15 +342,15 @@ __kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m07500_mxx (KERN_A
 
     if (decrypt_and_check (rc4_key, digest, timestamp_ct) == 1)
     {
-      if (atomic_inc (&hashes_shown[digests_offset]) == 0)
+      if (atomic_inc (&hashes_shown[DIGESTS_OFFSET]) == 0)
       {
-        mark_hash (plains_buf, d_return_buf, salt_pos, digests_cnt, 0, digests_offset + 0, gid, il_pos);
+        mark_hash (plains_buf, d_return_buf, SALT_POS, digests_cnt, 0, DIGESTS_OFFSET + 0, gid, il_pos, 0, 0);
       }
     }
   }
 }
 
-__kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m07500_sxx (KERN_ATTR_RULES_ESALT (krb5pa_t))
+KERNEL_FQ void m07500_sxx (KERN_ATTR_RULES_ESALT (krb5pa_t))
 {
   /**
    * modifier
@@ -356,27 +367,27 @@ __kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m07500_sxx (KERN_A
 
   COPY_PW (pws[gid]);
 
-  __local RC4_KEY rc4_keys[64];
+  LOCAL_VK RC4_KEY rc4_keys[64];
 
-  __local RC4_KEY *rc4_key = &rc4_keys[lid];
+  LOCAL_AS RC4_KEY *rc4_key = &rc4_keys[lid];
 
   u32 checksum[4];
 
-  checksum[0] = esalt_bufs[digests_offset].checksum[0];
-  checksum[1] = esalt_bufs[digests_offset].checksum[1];
-  checksum[2] = esalt_bufs[digests_offset].checksum[2];
-  checksum[3] = esalt_bufs[digests_offset].checksum[3];
+  checksum[0] = esalt_bufs[DIGESTS_OFFSET].checksum[0];
+  checksum[1] = esalt_bufs[DIGESTS_OFFSET].checksum[1];
+  checksum[2] = esalt_bufs[DIGESTS_OFFSET].checksum[2];
+  checksum[3] = esalt_bufs[DIGESTS_OFFSET].checksum[3];
 
   u32 timestamp_ct[8];
 
-  timestamp_ct[0] = esalt_bufs[digests_offset].timestamp[0];
-  timestamp_ct[1] = esalt_bufs[digests_offset].timestamp[1];
-  timestamp_ct[2] = esalt_bufs[digests_offset].timestamp[2];
-  timestamp_ct[3] = esalt_bufs[digests_offset].timestamp[3];
-  timestamp_ct[4] = esalt_bufs[digests_offset].timestamp[4];
-  timestamp_ct[5] = esalt_bufs[digests_offset].timestamp[5];
-  timestamp_ct[6] = esalt_bufs[digests_offset].timestamp[6];
-  timestamp_ct[7] = esalt_bufs[digests_offset].timestamp[7];
+  timestamp_ct[0] = esalt_bufs[DIGESTS_OFFSET].timestamp[0];
+  timestamp_ct[1] = esalt_bufs[DIGESTS_OFFSET].timestamp[1];
+  timestamp_ct[2] = esalt_bufs[DIGESTS_OFFSET].timestamp[2];
+  timestamp_ct[3] = esalt_bufs[DIGESTS_OFFSET].timestamp[3];
+  timestamp_ct[4] = esalt_bufs[DIGESTS_OFFSET].timestamp[4];
+  timestamp_ct[5] = esalt_bufs[DIGESTS_OFFSET].timestamp[5];
+  timestamp_ct[6] = esalt_bufs[DIGESTS_OFFSET].timestamp[6];
+  timestamp_ct[7] = esalt_bufs[DIGESTS_OFFSET].timestamp[7];
 
   /**
    * loop
@@ -402,9 +413,9 @@ __kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m07500_sxx (KERN_A
 
     if (decrypt_and_check (rc4_key, digest, timestamp_ct) == 1)
     {
-      if (atomic_inc (&hashes_shown[digests_offset]) == 0)
+      if (atomic_inc (&hashes_shown[DIGESTS_OFFSET]) == 0)
       {
-        mark_hash (plains_buf, d_return_buf, salt_pos, digests_cnt, 0, digests_offset + 0, gid, il_pos);
+        mark_hash (plains_buf, d_return_buf, SALT_POS, digests_cnt, 0, DIGESTS_OFFSET + 0, gid, il_pos, 0, 0);
       }
     }
   }

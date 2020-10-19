@@ -6,17 +6,18 @@
 //too much register pressure
 //#define NEW_SIMD_CODE
 
-#include "inc_vendor.cl"
-#include "inc_hash_constants.h"
-#include "inc_hash_functions.cl"
-#include "inc_types.cl"
+#ifdef KERNEL_STATIC
+#include "inc_vendor.h"
+#include "inc_types.h"
+#include "inc_platform.cl"
 #include "inc_common.cl"
 #include "inc_rp_optimized.h"
 #include "inc_rp_optimized.cl"
 #include "inc_simd.cl"
 #include "inc_hash_md5.cl"
+#endif
 
-__constant u32a padding[8] =
+CONSTANT_VK u32a padding[8] =
 {
   0x5e4ebf28,
   0x418a754e,
@@ -28,6 +29,27 @@ __constant u32a padding[8] =
   0x7a695364
 };
 
+typedef struct pdf
+{
+  int  V;
+  int  R;
+  int  P;
+
+  int  enc_md;
+
+  u32  id_buf[8];
+  u32  u_buf[32];
+  u32  o_buf[32];
+
+  int  id_len;
+  int  o_len;
+  int  u_len;
+
+  u32  rc4key[2];
+  u32  rc4data[2];
+
+} pdf_t;
+
 typedef struct
 {
   u8 S[256];
@@ -36,7 +58,7 @@ typedef struct
 
 } RC4_KEY;
 
-DECLSPEC void swap (__local RC4_KEY *rc4_key, const u8 i, const u8 j)
+DECLSPEC void swap (LOCAL_AS RC4_KEY *rc4_key, const u8 i, const u8 j)
 {
   u8 tmp;
 
@@ -45,12 +67,12 @@ DECLSPEC void swap (__local RC4_KEY *rc4_key, const u8 i, const u8 j)
   rc4_key->S[j] = tmp;
 }
 
-DECLSPEC void rc4_init_16 (__local RC4_KEY *rc4_key, const u32 *data)
+DECLSPEC void rc4_init_16 (LOCAL_AS RC4_KEY *rc4_key, const u32 *data)
 {
   u32 v = 0x03020100;
   u32 a = 0x04040404;
 
-  __local u32 *ptr = (__local u32 *) rc4_key->S;
+  LOCAL_AS u32 *ptr = (LOCAL_AS u32 *) rc4_key->S;
 
   #ifdef _unroll
   #pragma unroll
@@ -83,7 +105,7 @@ DECLSPEC void rc4_init_16 (__local RC4_KEY *rc4_key, const u32 *data)
   j += rc4_key->S[255] + d0; swap (rc4_key, 255, j);
 }
 
-DECLSPEC u8 rc4_next_16 (__local RC4_KEY *rc4_key, u8 i, u8 j, __constant u32 *in, u32 *out)
+DECLSPEC u8 rc4_next_16 (LOCAL_AS RC4_KEY *rc4_key, u8 i, u8 j, CONSTANT_AS u32a *in, u32 *out)
 {
   #ifdef _unroll
   #pragma unroll
@@ -136,7 +158,7 @@ DECLSPEC u8 rc4_next_16 (__local RC4_KEY *rc4_key, u8 i, u8 j, __constant u32 *i
   return j;
 }
 
-__kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m10400_m04 (KERN_ATTR_RULES_ESALT (pdf_t))
+KERNEL_FQ void m10400_m04 (KERN_ATTR_RULES_ESALT (pdf_t))
 {
   /**
    * modifier
@@ -170,9 +192,9 @@ __kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m10400_m04 (KERN_A
    * shared
    */
 
-  __local RC4_KEY rc4_keys[64];
+  LOCAL_VK RC4_KEY rc4_keys[64];
 
-  __local RC4_KEY *rc4_key = &rc4_keys[lid];
+  LOCAL_AS RC4_KEY *rc4_key = &rc4_keys[lid];
 
   /**
    * U_buf
@@ -180,23 +202,23 @@ __kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m10400_m04 (KERN_A
 
   u32 o_buf[8];
 
-  o_buf[0] = esalt_bufs[digests_offset].o_buf[0];
-  o_buf[1] = esalt_bufs[digests_offset].o_buf[1];
-  o_buf[2] = esalt_bufs[digests_offset].o_buf[2];
-  o_buf[3] = esalt_bufs[digests_offset].o_buf[3];
-  o_buf[4] = esalt_bufs[digests_offset].o_buf[4];
-  o_buf[5] = esalt_bufs[digests_offset].o_buf[5];
-  o_buf[6] = esalt_bufs[digests_offset].o_buf[6];
-  o_buf[7] = esalt_bufs[digests_offset].o_buf[7];
+  o_buf[0] = esalt_bufs[DIGESTS_OFFSET].o_buf[0];
+  o_buf[1] = esalt_bufs[DIGESTS_OFFSET].o_buf[1];
+  o_buf[2] = esalt_bufs[DIGESTS_OFFSET].o_buf[2];
+  o_buf[3] = esalt_bufs[DIGESTS_OFFSET].o_buf[3];
+  o_buf[4] = esalt_bufs[DIGESTS_OFFSET].o_buf[4];
+  o_buf[5] = esalt_bufs[DIGESTS_OFFSET].o_buf[5];
+  o_buf[6] = esalt_bufs[DIGESTS_OFFSET].o_buf[6];
+  o_buf[7] = esalt_bufs[DIGESTS_OFFSET].o_buf[7];
 
-  u32 P = esalt_bufs[digests_offset].P;
+  u32 P = esalt_bufs[DIGESTS_OFFSET].P;
 
   u32 id_buf[4];
 
-  id_buf[0] = esalt_bufs[digests_offset].id_buf[0];
-  id_buf[1] = esalt_bufs[digests_offset].id_buf[1];
-  id_buf[2] = esalt_bufs[digests_offset].id_buf[2];
-  id_buf[3] = esalt_bufs[digests_offset].id_buf[3];
+  id_buf[0] = esalt_bufs[DIGESTS_OFFSET].id_buf[0];
+  id_buf[1] = esalt_bufs[DIGESTS_OFFSET].id_buf[1];
+  id_buf[2] = esalt_bufs[DIGESTS_OFFSET].id_buf[2];
+  id_buf[3] = esalt_bufs[DIGESTS_OFFSET].id_buf[3];
 
   /**
    * loop
@@ -209,7 +231,7 @@ __kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m10400_m04 (KERN_A
     u32x w2[4] = { 0 };
     u32x w3[4] = { 0 };
 
-    const u32x out_len = apply_rules_vect (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
+    const u32x out_len = apply_rules_vect_optimized (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
 
     /**
      * pdf
@@ -304,15 +326,15 @@ __kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m10400_m04 (KERN_A
   }
 }
 
-__kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m10400_m08 (KERN_ATTR_RULES_ESALT (pdf_t))
+KERNEL_FQ void m10400_m08 (KERN_ATTR_RULES_ESALT (pdf_t))
 {
 }
 
-__kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m10400_m16 (KERN_ATTR_RULES_ESALT (pdf_t))
+KERNEL_FQ void m10400_m16 (KERN_ATTR_RULES_ESALT (pdf_t))
 {
 }
 
-__kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m10400_s04 (KERN_ATTR_RULES_ESALT (pdf_t))
+KERNEL_FQ void m10400_s04 (KERN_ATTR_RULES_ESALT (pdf_t))
 {
   /**
    * modifier
@@ -346,9 +368,9 @@ __kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m10400_s04 (KERN_A
    * shared
    */
 
-  __local RC4_KEY rc4_keys[64];
+  LOCAL_VK RC4_KEY rc4_keys[64];
 
-  __local RC4_KEY *rc4_key = &rc4_keys[lid];
+  LOCAL_AS RC4_KEY *rc4_key = &rc4_keys[lid];
 
   /**
    * U_buf
@@ -356,23 +378,23 @@ __kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m10400_s04 (KERN_A
 
   u32 o_buf[8];
 
-  o_buf[0] = esalt_bufs[digests_offset].o_buf[0];
-  o_buf[1] = esalt_bufs[digests_offset].o_buf[1];
-  o_buf[2] = esalt_bufs[digests_offset].o_buf[2];
-  o_buf[3] = esalt_bufs[digests_offset].o_buf[3];
-  o_buf[4] = esalt_bufs[digests_offset].o_buf[4];
-  o_buf[5] = esalt_bufs[digests_offset].o_buf[5];
-  o_buf[6] = esalt_bufs[digests_offset].o_buf[6];
-  o_buf[7] = esalt_bufs[digests_offset].o_buf[7];
+  o_buf[0] = esalt_bufs[DIGESTS_OFFSET].o_buf[0];
+  o_buf[1] = esalt_bufs[DIGESTS_OFFSET].o_buf[1];
+  o_buf[2] = esalt_bufs[DIGESTS_OFFSET].o_buf[2];
+  o_buf[3] = esalt_bufs[DIGESTS_OFFSET].o_buf[3];
+  o_buf[4] = esalt_bufs[DIGESTS_OFFSET].o_buf[4];
+  o_buf[5] = esalt_bufs[DIGESTS_OFFSET].o_buf[5];
+  o_buf[6] = esalt_bufs[DIGESTS_OFFSET].o_buf[6];
+  o_buf[7] = esalt_bufs[DIGESTS_OFFSET].o_buf[7];
 
-  u32 P = esalt_bufs[digests_offset].P;
+  u32 P = esalt_bufs[DIGESTS_OFFSET].P;
 
   u32 id_buf[4];
 
-  id_buf[0] = esalt_bufs[digests_offset].id_buf[0];
-  id_buf[1] = esalt_bufs[digests_offset].id_buf[1];
-  id_buf[2] = esalt_bufs[digests_offset].id_buf[2];
-  id_buf[3] = esalt_bufs[digests_offset].id_buf[3];
+  id_buf[0] = esalt_bufs[DIGESTS_OFFSET].id_buf[0];
+  id_buf[1] = esalt_bufs[DIGESTS_OFFSET].id_buf[1];
+  id_buf[2] = esalt_bufs[DIGESTS_OFFSET].id_buf[2];
+  id_buf[3] = esalt_bufs[DIGESTS_OFFSET].id_buf[3];
 
   /**
    * digest
@@ -380,10 +402,10 @@ __kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m10400_s04 (KERN_A
 
   const u32 search[4] =
   {
-    digests_buf[digests_offset].digest_buf[DGST_R0],
-    digests_buf[digests_offset].digest_buf[DGST_R1],
-    digests_buf[digests_offset].digest_buf[DGST_R2],
-    digests_buf[digests_offset].digest_buf[DGST_R3]
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R0],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R1],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R2],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R3]
   };
 
   /**
@@ -397,7 +419,7 @@ __kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m10400_s04 (KERN_A
     u32x w2[4] = { 0 };
     u32x w3[4] = { 0 };
 
-    const u32x out_len = apply_rules_vect (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
+    const u32x out_len = apply_rules_vect_optimized (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
 
     /**
      * pdf
@@ -492,10 +514,10 @@ __kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m10400_s04 (KERN_A
   }
 }
 
-__kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m10400_s08 (KERN_ATTR_RULES_ESALT (pdf_t))
+KERNEL_FQ void m10400_s08 (KERN_ATTR_RULES_ESALT (pdf_t))
 {
 }
 
-__kernel void __attribute__((reqd_work_group_size(64, 1, 1))) m10400_s16 (KERN_ATTR_RULES_ESALT (pdf_t))
+KERNEL_FQ void m10400_s16 (KERN_ATTR_RULES_ESALT (pdf_t))
 {
 }

@@ -5,17 +5,18 @@
 
 //#define NEW_SIMD_CODE
 
-#include "inc_vendor.cl"
-#include "inc_hash_constants.h"
-#include "inc_hash_functions.cl"
-#include "inc_types.cl"
+#ifdef KERNEL_STATIC
+#include "inc_vendor.h"
+#include "inc_types.h"
+#include "inc_platform.cl"
 #include "inc_common.cl"
 #include "inc_rp_optimized.h"
 #include "inc_rp_optimized.cl"
 #include "inc_simd.cl"
 #include "inc_hash_md5.cl"
+#endif
 
-__constant u32a padding[8] =
+CONSTANT_VK u32a padding[8] =
 {
   0x5e4ebf28,
   0x418a754e,
@@ -27,7 +28,28 @@ __constant u32a padding[8] =
   0x7a695364
 };
 
-__kernel void m10420_m04 (KERN_ATTR_RULES_ESALT (pdf_t))
+typedef struct pdf
+{
+  int  V;
+  int  R;
+  int  P;
+
+  int  enc_md;
+
+  u32  id_buf[8];
+  u32  u_buf[32];
+  u32  o_buf[32];
+
+  int  id_len;
+  int  o_len;
+  int  u_len;
+
+  u32  rc4key[2];
+  u32  rc4data[2];
+
+} pdf_t;
+
+KERNEL_FQ void m10420_m04 (KERN_ATTR_RULES_ESALT (pdf_t))
 {
   /**
    * modifier
@@ -63,23 +85,23 @@ __kernel void m10420_m04 (KERN_ATTR_RULES_ESALT (pdf_t))
 
   u32 o_buf[8];
 
-  o_buf[0] = esalt_bufs[digests_offset].o_buf[0];
-  o_buf[1] = esalt_bufs[digests_offset].o_buf[1];
-  o_buf[2] = esalt_bufs[digests_offset].o_buf[2];
-  o_buf[3] = esalt_bufs[digests_offset].o_buf[3];
-  o_buf[4] = esalt_bufs[digests_offset].o_buf[4];
-  o_buf[5] = esalt_bufs[digests_offset].o_buf[5];
-  o_buf[6] = esalt_bufs[digests_offset].o_buf[6];
-  o_buf[7] = esalt_bufs[digests_offset].o_buf[7];
+  o_buf[0] = esalt_bufs[DIGESTS_OFFSET].o_buf[0];
+  o_buf[1] = esalt_bufs[DIGESTS_OFFSET].o_buf[1];
+  o_buf[2] = esalt_bufs[DIGESTS_OFFSET].o_buf[2];
+  o_buf[3] = esalt_bufs[DIGESTS_OFFSET].o_buf[3];
+  o_buf[4] = esalt_bufs[DIGESTS_OFFSET].o_buf[4];
+  o_buf[5] = esalt_bufs[DIGESTS_OFFSET].o_buf[5];
+  o_buf[6] = esalt_bufs[DIGESTS_OFFSET].o_buf[6];
+  o_buf[7] = esalt_bufs[DIGESTS_OFFSET].o_buf[7];
 
-  u32 P = esalt_bufs[digests_offset].P;
+  u32 P = esalt_bufs[DIGESTS_OFFSET].P;
 
   u32 id_buf[4];
 
-  id_buf[0] = esalt_bufs[digests_offset].id_buf[0];
-  id_buf[1] = esalt_bufs[digests_offset].id_buf[1];
-  id_buf[2] = esalt_bufs[digests_offset].id_buf[2];
-  id_buf[3] = esalt_bufs[digests_offset].id_buf[3];
+  id_buf[0] = esalt_bufs[DIGESTS_OFFSET].id_buf[0];
+  id_buf[1] = esalt_bufs[DIGESTS_OFFSET].id_buf[1];
+  id_buf[2] = esalt_bufs[DIGESTS_OFFSET].id_buf[2];
+  id_buf[3] = esalt_bufs[DIGESTS_OFFSET].id_buf[3];
 
   /**
    * loop
@@ -92,7 +114,7 @@ __kernel void m10420_m04 (KERN_ATTR_RULES_ESALT (pdf_t))
     u32x w2[4] = { 0 };
     u32x w3[4] = { 0 };
 
-    const u32x out_len = apply_rules_vect (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
+    const u32x out_len = apply_rules_vect_optimized (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
 
     /**
      * pdf
@@ -180,15 +202,15 @@ __kernel void m10420_m04 (KERN_ATTR_RULES_ESALT (pdf_t))
   }
 }
 
-__kernel void m10420_m08 (KERN_ATTR_RULES_ESALT (pdf_t))
+KERNEL_FQ void m10420_m08 (KERN_ATTR_RULES_ESALT (pdf_t))
 {
 }
 
-__kernel void m10420_m16 (KERN_ATTR_RULES_ESALT (pdf_t))
+KERNEL_FQ void m10420_m16 (KERN_ATTR_RULES_ESALT (pdf_t))
 {
 }
 
-__kernel void m10420_s04 (KERN_ATTR_RULES_ESALT (pdf_t))
+KERNEL_FQ void m10420_s04 (KERN_ATTR_RULES_ESALT (pdf_t))
 {
   /**
    * modifier
@@ -224,23 +246,23 @@ __kernel void m10420_s04 (KERN_ATTR_RULES_ESALT (pdf_t))
 
   u32 o_buf[8];
 
-  o_buf[0] = esalt_bufs[digests_offset].o_buf[0];
-  o_buf[1] = esalt_bufs[digests_offset].o_buf[1];
-  o_buf[2] = esalt_bufs[digests_offset].o_buf[2];
-  o_buf[3] = esalt_bufs[digests_offset].o_buf[3];
-  o_buf[4] = esalt_bufs[digests_offset].o_buf[4];
-  o_buf[5] = esalt_bufs[digests_offset].o_buf[5];
-  o_buf[6] = esalt_bufs[digests_offset].o_buf[6];
-  o_buf[7] = esalt_bufs[digests_offset].o_buf[7];
+  o_buf[0] = esalt_bufs[DIGESTS_OFFSET].o_buf[0];
+  o_buf[1] = esalt_bufs[DIGESTS_OFFSET].o_buf[1];
+  o_buf[2] = esalt_bufs[DIGESTS_OFFSET].o_buf[2];
+  o_buf[3] = esalt_bufs[DIGESTS_OFFSET].o_buf[3];
+  o_buf[4] = esalt_bufs[DIGESTS_OFFSET].o_buf[4];
+  o_buf[5] = esalt_bufs[DIGESTS_OFFSET].o_buf[5];
+  o_buf[6] = esalt_bufs[DIGESTS_OFFSET].o_buf[6];
+  o_buf[7] = esalt_bufs[DIGESTS_OFFSET].o_buf[7];
 
-  u32 P = esalt_bufs[digests_offset].P;
+  u32 P = esalt_bufs[DIGESTS_OFFSET].P;
 
   u32 id_buf[4];
 
-  id_buf[0] = esalt_bufs[digests_offset].id_buf[0];
-  id_buf[1] = esalt_bufs[digests_offset].id_buf[1];
-  id_buf[2] = esalt_bufs[digests_offset].id_buf[2];
-  id_buf[3] = esalt_bufs[digests_offset].id_buf[3];
+  id_buf[0] = esalt_bufs[DIGESTS_OFFSET].id_buf[0];
+  id_buf[1] = esalt_bufs[DIGESTS_OFFSET].id_buf[1];
+  id_buf[2] = esalt_bufs[DIGESTS_OFFSET].id_buf[2];
+  id_buf[3] = esalt_bufs[DIGESTS_OFFSET].id_buf[3];
 
   /**
    * digest
@@ -248,8 +270,8 @@ __kernel void m10420_s04 (KERN_ATTR_RULES_ESALT (pdf_t))
 
   const u32 search[4] =
   {
-    digests_buf[digests_offset].digest_buf[DGST_R0],
-    digests_buf[digests_offset].digest_buf[DGST_R1],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R0],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R1],
     0,
     0
   };
@@ -265,7 +287,7 @@ __kernel void m10420_s04 (KERN_ATTR_RULES_ESALT (pdf_t))
     u32x w2[4] = { 0 };
     u32x w3[4] = { 0 };
 
-    const u32x out_len = apply_rules_vect (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
+    const u32x out_len = apply_rules_vect_optimized (pw_buf0, pw_buf1, pw_len, rules_buf, il_pos, w0, w1);
 
     /**
      * pdf
@@ -353,10 +375,10 @@ __kernel void m10420_s04 (KERN_ATTR_RULES_ESALT (pdf_t))
   }
 }
 
-__kernel void m10420_s08 (KERN_ATTR_RULES_ESALT (pdf_t))
+KERNEL_FQ void m10420_s08 (KERN_ATTR_RULES_ESALT (pdf_t))
 {
 }
 
-__kernel void m10420_s16 (KERN_ATTR_RULES_ESALT (pdf_t))
+KERNEL_FQ void m10420_s16 (KERN_ATTR_RULES_ESALT (pdf_t))
 {
 }

@@ -5,14 +5,27 @@
 
 //#define NEW_SIMD_CODE
 
-#include "inc_vendor.cl"
-#include "inc_hash_constants.h"
-#include "inc_hash_functions.cl"
-#include "inc_types.cl"
+#ifdef KERNEL_STATIC
+#include "inc_vendor.h"
+#include "inc_types.h"
+#include "inc_platform.cl"
 #include "inc_common.cl"
 #include "inc_simd.cl"
+#include "inc_hash_md5.cl"
+#endif
 
-__kernel void m16100_m04 (KERN_ATTR_ESALT (tacacs_plus_t))
+typedef struct tacacs_plus
+{
+  u32 session_buf[16];
+
+  u32 ct_data_buf[64];
+  u32 ct_data_len;
+
+  u32 sequence_buf[16];
+
+} tacacs_plus_t;
+
+KERNEL_FQ void m16100_m04 (KERN_ATTR_ESALT (tacacs_plus_t))
 {
   /**
    * modifier
@@ -46,19 +59,19 @@ __kernel void m16100_m04 (KERN_ATTR_ESALT (tacacs_plus_t))
    * salt
    */
 
-  const u32 session_buf  = esalt_bufs[digests_offset].session_buf[0];
-  const u32 sequence_buf = esalt_bufs[digests_offset].sequence_buf[0];
+  const u32 session_buf  = esalt_bufs[DIGESTS_OFFSET].session_buf[0];
+  const u32 sequence_buf = esalt_bufs[DIGESTS_OFFSET].sequence_buf[0];
 
   /**
    * digest
    */
 
-  const u32 ct_len = esalt_bufs[digests_offset].ct_data_len;
+  const u32 ct_len = esalt_bufs[DIGESTS_OFFSET].ct_data_len;
 
   u32 ct_buf[2];
 
-  ct_buf[0] = esalt_bufs[digests_offset].ct_data_buf[0];
-  ct_buf[1] = esalt_bufs[digests_offset].ct_data_buf[1];
+  ct_buf[0] = esalt_bufs[DIGESTS_OFFSET].ct_data_buf[0];
+  ct_buf[1] = esalt_bufs[DIGESTS_OFFSET].ct_data_buf[1];
 
   /**
    * loop
@@ -304,9 +317,9 @@ __kernel void m16100_m04 (KERN_ATTR_ESALT (tacacs_plus_t))
       &&  ((authen_service >= 0x00) && (authen_service <= 0x09))
       &&  ((8 + user_len + port_len + rem_addr_len + data_len) == ct_len))
       {
-        if (atomic_inc (&hashes_shown[digests_offset]) == 0)
+        if (atomic_inc (&hashes_shown[DIGESTS_OFFSET]) == 0)
         {
-          mark_hash (plains_buf, d_return_buf, salt_pos, digests_cnt, 0, digests_offset + 0, gid, il_pos);
+          mark_hash (plains_buf, d_return_buf, SALT_POS, digests_cnt, 0, DIGESTS_OFFSET + 0, gid, il_pos, 0, 0);
         }
       }
     }
@@ -322,9 +335,9 @@ __kernel void m16100_m04 (KERN_ATTR_ESALT (tacacs_plus_t))
        &&  (data_len == 0)
        &&  (flags == 0))
       {
-        if (atomic_inc (&hashes_shown[digests_offset]) == 0)
+        if (atomic_inc (&hashes_shown[DIGESTS_OFFSET]) == 0)
         {
-          mark_hash (plains_buf, d_return_buf, salt_pos, digests_cnt, 0, digests_offset + 0, gid, il_pos);
+          mark_hash (plains_buf, d_return_buf, SALT_POS, digests_cnt, 0, DIGESTS_OFFSET + 0, gid, il_pos, 0, 0);
         }
       }
     }
@@ -341,24 +354,24 @@ __kernel void m16100_m04 (KERN_ATTR_ESALT (tacacs_plus_t))
        &&  (flags == 0x01 || flags == 0x00)
        &&  (6 + msg_len + data_len == ct_len))
       {
-        if (atomic_inc (&hashes_shown[digests_offset]) == 0)
+        if (atomic_inc (&hashes_shown[DIGESTS_OFFSET]) == 0)
         {
-          mark_hash (plains_buf, d_return_buf, salt_pos, digests_cnt, 0, digests_offset + 0, gid, il_pos);
+          mark_hash (plains_buf, d_return_buf, SALT_POS, digests_cnt, 0, DIGESTS_OFFSET + 0, gid, il_pos, 0, 0);
         }
       }
     }
   }
 }
 
-__kernel void m16100_m08 (KERN_ATTR_ESALT (tacacs_plus_t))
+KERNEL_FQ void m16100_m08 (KERN_ATTR_ESALT (tacacs_plus_t))
 {
 }
 
-__kernel void m16100_m16 (KERN_ATTR_ESALT (tacacs_plus_t))
+KERNEL_FQ void m16100_m16 (KERN_ATTR_ESALT (tacacs_plus_t))
 {
 }
 
-__kernel void m16100_s04 (KERN_ATTR_ESALT (tacacs_plus_t))
+KERNEL_FQ void m16100_s04 (KERN_ATTR_ESALT (tacacs_plus_t))
 {
   /**
    * modifier
@@ -392,19 +405,19 @@ __kernel void m16100_s04 (KERN_ATTR_ESALT (tacacs_plus_t))
    * salt
    */
 
-  const u32 session_buf  = esalt_bufs[digests_offset].session_buf[0];
-  const u32 sequence_buf = esalt_bufs[digests_offset].sequence_buf[0];
+  const u32 session_buf  = esalt_bufs[DIGESTS_OFFSET].session_buf[0];
+  const u32 sequence_buf = esalt_bufs[DIGESTS_OFFSET].sequence_buf[0];
 
   /**
    * digest
    */
 
-  const u32 ct_len = esalt_bufs[digests_offset].ct_data_len;
+  const u32 ct_len = esalt_bufs[DIGESTS_OFFSET].ct_data_len;
 
   u32 ct_buf[2];
 
-  ct_buf[0] = esalt_bufs[digests_offset].ct_data_buf[0];
-  ct_buf[1] = esalt_bufs[digests_offset].ct_data_buf[1];
+  ct_buf[0] = esalt_bufs[DIGESTS_OFFSET].ct_data_buf[0];
+  ct_buf[1] = esalt_bufs[DIGESTS_OFFSET].ct_data_buf[1];
 
   /**
    * loop
@@ -650,9 +663,9 @@ __kernel void m16100_s04 (KERN_ATTR_ESALT (tacacs_plus_t))
       &&  ((authen_service >= 0x00) && (authen_service <= 0x09))
       &&  ((8 + user_len + port_len + rem_addr_len + data_len) == ct_len))
       {
-        if (atomic_inc (&hashes_shown[digests_offset]) == 0)
+        if (atomic_inc (&hashes_shown[DIGESTS_OFFSET]) == 0)
         {
-          mark_hash (plains_buf, d_return_buf, salt_pos, digests_cnt, 0, digests_offset + 0, gid, il_pos);
+          mark_hash (plains_buf, d_return_buf, SALT_POS, digests_cnt, 0, DIGESTS_OFFSET + 0, gid, il_pos, 0, 0);
         }
       }
     }
@@ -668,9 +681,9 @@ __kernel void m16100_s04 (KERN_ATTR_ESALT (tacacs_plus_t))
        &&  (data_len == 0)
        &&  (flags == 0))
       {
-        if (atomic_inc (&hashes_shown[digests_offset]) == 0)
+        if (atomic_inc (&hashes_shown[DIGESTS_OFFSET]) == 0)
         {
-          mark_hash (plains_buf, d_return_buf, salt_pos, digests_cnt, 0, digests_offset + 0, gid, il_pos);
+          mark_hash (plains_buf, d_return_buf, SALT_POS, digests_cnt, 0, DIGESTS_OFFSET + 0, gid, il_pos, 0, 0);
         }
       }
     }
@@ -687,19 +700,19 @@ __kernel void m16100_s04 (KERN_ATTR_ESALT (tacacs_plus_t))
        &&  (flags == 0x01 || flags == 0x00)
        &&  (6 + msg_len + data_len == ct_len))
       {
-        if (atomic_inc (&hashes_shown[digests_offset]) == 0)
+        if (atomic_inc (&hashes_shown[DIGESTS_OFFSET]) == 0)
         {
-          mark_hash (plains_buf, d_return_buf, salt_pos, digests_cnt, 0, digests_offset + 0, gid, il_pos);
+          mark_hash (plains_buf, d_return_buf, SALT_POS, digests_cnt, 0, DIGESTS_OFFSET + 0, gid, il_pos, 0, 0);
         }
       }
     }
   }
 }
 
-__kernel void m16100_s08 (KERN_ATTR_ESALT (tacacs_plus_t))
+KERNEL_FQ void m16100_s08 (KERN_ATTR_ESALT (tacacs_plus_t))
 {
 }
 
-__kernel void m16100_s16 (KERN_ATTR_ESALT (tacacs_plus_t))
+KERNEL_FQ void m16100_s16 (KERN_ATTR_ESALT (tacacs_plus_t))
 {
 }

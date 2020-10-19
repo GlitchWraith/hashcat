@@ -5,17 +5,18 @@
 
 //#define NEW_SIMD_CODE
 
-#include "inc_vendor.cl"
-#include "inc_hash_constants.h"
-#include "inc_hash_functions.cl"
-#include "inc_types.cl"
+#ifdef KERNEL_STATIC
+#include "inc_vendor.h"
+#include "inc_types.h"
+#include "inc_platform.cl"
 #include "inc_common.cl"
 #include "inc_rp.h"
 #include "inc_rp.cl"
 #include "inc_scalar.cl"
 #include "inc_hash_sha256.cl"
+#endif
 
-__kernel void m01420_mxx (KERN_ATTR_RULES ())
+KERNEL_FQ void m01420_mxx (KERN_ATTR_RULES ())
 {
   /**
    * modifier
@@ -36,7 +37,7 @@ __kernel void m01420_mxx (KERN_ATTR_RULES ())
 
   sha256_init (&ctx0);
 
-  sha256_update_global_swap (&ctx0, salt_bufs[salt_pos].salt_buf, salt_bufs[salt_pos].salt_len);
+  sha256_update_global_swap (&ctx0, salt_bufs[SALT_POS].salt_buf, salt_bufs[SALT_POS].salt_len);
 
   /**
    * loop
@@ -63,7 +64,7 @@ __kernel void m01420_mxx (KERN_ATTR_RULES ())
   }
 }
 
-__kernel void m01420_sxx (KERN_ATTR_RULES ())
+KERNEL_FQ void m01420_sxx (KERN_ATTR_RULES ())
 {
   /**
    * modifier
@@ -80,10 +81,10 @@ __kernel void m01420_sxx (KERN_ATTR_RULES ())
 
   const u32 search[4] =
   {
-    digests_buf[digests_offset].digest_buf[DGST_R0],
-    digests_buf[digests_offset].digest_buf[DGST_R1],
-    digests_buf[digests_offset].digest_buf[DGST_R2],
-    digests_buf[digests_offset].digest_buf[DGST_R3]
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R0],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R1],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R2],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R3]
   };
 
   /**
@@ -96,7 +97,7 @@ __kernel void m01420_sxx (KERN_ATTR_RULES ())
 
   sha256_init (&ctx0);
 
-  sha256_update_global_swap (&ctx0, salt_bufs[salt_pos].salt_buf, salt_bufs[salt_pos].salt_len);
+  sha256_update_global_swap (&ctx0, salt_bufs[SALT_POS].salt_buf, salt_bufs[SALT_POS].salt_len);
 
   /**
    * loop

@@ -9,12 +9,10 @@
 #include "event.h"
 #include "logfile.h"
 #include "shared.h"
-#include "filehandling.h"
 #include "folder.h"
 #include "rp.h"
-#include "rp_cpu.h"
-#include "straight.h"
 #include "wordlist.h"
+#include "straight.h"
 
 static int straight_ctx_add_wl (hashcat_ctx_t *hashcat_ctx, const char *dict)
 {
@@ -45,6 +43,7 @@ int straight_ctx_update_loop (hashcat_ctx_t *hashcat_ctx)
 {
   combinator_ctx_t     *combinator_ctx     = hashcat_ctx->combinator_ctx;
   induct_ctx_t         *induct_ctx         = hashcat_ctx->induct_ctx;
+  hashes_t             *hashes             = hashcat_ctx->hashes;
   logfile_ctx_t        *logfile_ctx        = hashcat_ctx->logfile_ctx;
   mask_ctx_t           *mask_ctx           = hashcat_ctx->mask_ctx;
   status_ctx_t         *status_ctx         = hashcat_ctx->status_ctx;
@@ -72,18 +71,18 @@ int straight_ctx_update_loop (hashcat_ctx_t *hashcat_ctx)
         logfile_sub_var_string ("rulefile", user_options->rp_files[i]);
       }
 
-      FILE *fd = fopen (straight_ctx->dict, "rb");
+      HCFILE fp;
 
-      if (fd == NULL)
+      if (hc_fopen (&fp, straight_ctx->dict, "rb") == false)
       {
         event_log_error (hashcat_ctx, "%s: %s", straight_ctx->dict, strerror (errno));
 
         return -1;
       }
 
-      const int rc = count_words (hashcat_ctx, fd, straight_ctx->dict, &status_ctx->words_cnt);
+      const int rc = count_words (hashcat_ctx, &fp, straight_ctx->dict, &status_ctx->words_cnt);
 
-      fclose (fd);
+      hc_fclose (&fp);
 
       if (rc == -1)
       {
@@ -107,18 +106,18 @@ int straight_ctx_update_loop (hashcat_ctx_t *hashcat_ctx)
 
     if (combinator_ctx->combs_mode == COMBINATOR_MODE_BASE_LEFT)
     {
-      FILE *fd = fopen (combinator_ctx->dict1, "rb");
+      HCFILE fp;
 
-      if (fd == NULL)
+      if (hc_fopen (&fp, combinator_ctx->dict1, "rb") == false)
       {
         event_log_error (hashcat_ctx, "%s: %s", combinator_ctx->dict1, strerror (errno));
 
         return -1;
       }
 
-      const int rc = count_words (hashcat_ctx, fd, combinator_ctx->dict1, &status_ctx->words_cnt);
+      const int rc = count_words (hashcat_ctx, &fp, combinator_ctx->dict1, &status_ctx->words_cnt);
 
-      fclose (fd);
+      hc_fclose (&fp);
 
       if (rc == -1)
       {
@@ -129,18 +128,18 @@ int straight_ctx_update_loop (hashcat_ctx_t *hashcat_ctx)
     }
     else if (combinator_ctx->combs_mode == COMBINATOR_MODE_BASE_RIGHT)
     {
-      FILE *fd = fopen (combinator_ctx->dict2, "rb");
+      HCFILE fp;
 
-      if (fd == NULL)
+      if (hc_fopen (&fp, combinator_ctx->dict2, "rb") == false)
       {
         event_log_error (hashcat_ctx, "%s: %s", combinator_ctx->dict2, strerror (errno));
 
         return -1;
       }
 
-      const int rc = count_words (hashcat_ctx, fd, combinator_ctx->dict2, &status_ctx->words_cnt);
+      const int rc = count_words (hashcat_ctx, &fp, combinator_ctx->dict2, &status_ctx->words_cnt);
 
-      fclose (fd);
+      hc_fclose (&fp);
 
       if (rc == -1)
       {
@@ -175,18 +174,18 @@ int straight_ctx_update_loop (hashcat_ctx_t *hashcat_ctx)
     logfile_sub_string (straight_ctx->dict);
     logfile_sub_string (mask_ctx->mask);
 
-    FILE *fd = fopen (straight_ctx->dict, "rb");
+    HCFILE fp;
 
-    if (fd == NULL)
+    if (hc_fopen (&fp, straight_ctx->dict, "rb") == false)
     {
       event_log_error (hashcat_ctx, "%s: %s", straight_ctx->dict, strerror (errno));
 
       return -1;
     }
 
-    const int rc = count_words (hashcat_ctx, fd, straight_ctx->dict, &status_ctx->words_cnt);
+    const int rc = count_words (hashcat_ctx, &fp, straight_ctx->dict, &status_ctx->words_cnt);
 
-    fclose (fd);
+    hc_fclose (&fp);
 
     if (rc == -1)
     {
@@ -200,6 +199,54 @@ int straight_ctx_update_loop (hashcat_ctx_t *hashcat_ctx)
       logfile_sub_msg ("STOP");
 
       return 0;
+    }
+  }
+  else if (user_options->attack_mode == ATTACK_MODE_ASSOCIATION)
+  {
+    if (user_options_extra->wordlist_mode == WL_MODE_FILE)
+    {
+      straight_ctx->dict = straight_ctx->dicts[straight_ctx->dicts_pos];
+
+      logfile_sub_string (straight_ctx->dict);
+
+      for (u32 i = 0; i < user_options->rp_files_cnt; i++)
+      {
+        logfile_sub_var_string ("rulefile", user_options->rp_files[i]);
+      }
+
+      HCFILE fp;
+
+      if (hc_fopen (&fp, straight_ctx->dict, "rb") == false)
+      {
+        event_log_error (hashcat_ctx, "%s: %s", straight_ctx->dict, strerror (errno));
+
+        return -1;
+      }
+
+      const int rc = count_words (hashcat_ctx, &fp, straight_ctx->dict, &status_ctx->words_cnt);
+
+      hc_fclose (&fp);
+
+      if (rc == -1)
+      {
+        event_log_error (hashcat_ctx, "Integer overflow detected in keyspace of wordlist: %s", straight_ctx->dict);
+
+        return -1;
+      }
+
+      if ((status_ctx->words_cnt / straight_ctx->kernel_rules_cnt) != hashes->salts_cnt)
+      {
+        event_log_error (hashcat_ctx, "Number of words in wordlist %s is not in sync with number of salts (words: %" PRIu64 ", salts: %d)", straight_ctx->dict, status_ctx->words_cnt, hashes->salts_cnt);
+
+        return -1;
+      }
+
+      if (status_ctx->words_cnt == 0)
+      {
+        logfile_sub_msg ("STOP");
+
+        return 0;
+      }
     }
   }
 
@@ -216,7 +263,7 @@ int straight_ctx_init (hashcat_ctx_t *hashcat_ctx)
 
   if (user_options->example_hashes == true) return 0;
   if (user_options->left           == true) return 0;
-  if (user_options->opencl_info    == true) return 0;
+  if (user_options->backend_info   == true) return 0;
   if (user_options->show           == true) return 0;
   if (user_options->usage          == true) return 0;
   if (user_options->version        == true) return 0;
@@ -241,15 +288,11 @@ int straight_ctx_init (hashcat_ctx_t *hashcat_ctx)
   {
     if (user_options->rp_files_cnt)
     {
-      const int rc_kernel_load = kernel_rules_load (hashcat_ctx, &straight_ctx->kernel_rules_buf, &straight_ctx->kernel_rules_cnt);
-
-      if (rc_kernel_load == -1) return -1;
+      if (kernel_rules_load (hashcat_ctx, &straight_ctx->kernel_rules_buf, &straight_ctx->kernel_rules_cnt) == -1) return -1;
     }
     else if (user_options->rp_gen)
     {
-      const int rc_kernel_generate = kernel_rules_generate (hashcat_ctx, &straight_ctx->kernel_rules_buf, &straight_ctx->kernel_rules_cnt);
-
-      if (rc_kernel_generate == -1) return -1;
+      if (kernel_rules_generate (hashcat_ctx, &straight_ctx->kernel_rules_buf, &straight_ctx->kernel_rules_cnt) == -1) return -1;
     }
   }
 
@@ -257,7 +300,7 @@ int straight_ctx_init (hashcat_ctx_t *hashcat_ctx)
    * wordlist based work
    */
 
-  if (user_options->attack_mode == ATTACK_MODE_STRAIGHT)
+  if ((user_options->attack_mode == ATTACK_MODE_STRAIGHT) || (user_options->attack_mode == ATTACK_MODE_ASSOCIATION))
   {
     if (user_options_extra->wordlist_mode == WL_MODE_FILE)
     {
@@ -292,9 +335,7 @@ int straight_ctx_init (hashcat_ctx_t *hashcat_ctx)
 
               if (hc_path_is_file (l1_filename) == true)
               {
-                const int rc = straight_ctx_add_wl (hashcat_ctx, l1_filename);
-
-                if (rc == -1)
+                if (straight_ctx_add_wl (hashcat_ctx, l1_filename) == -1)
                 {
                   hcfree (dictionary_files);
 
@@ -308,9 +349,7 @@ int straight_ctx_init (hashcat_ctx_t *hashcat_ctx)
         }
         else
         {
-          const int rc = straight_ctx_add_wl (hashcat_ctx, l0_filename);
-
-          if (rc == -1) return -1;
+          if (straight_ctx_add_wl (hashcat_ctx, l0_filename) == -1) return -1;
         }
       }
 
@@ -363,9 +402,7 @@ int straight_ctx_init (hashcat_ctx_t *hashcat_ctx)
 
             if (hc_path_is_file (l1_filename) == true)
             {
-              const int rc = straight_ctx_add_wl (hashcat_ctx, l1_filename);
-
-              if (rc == -1)
+              if (straight_ctx_add_wl (hashcat_ctx, l1_filename) == -1)
               {
                 hcfree (dictionary_files);
 
@@ -379,9 +416,7 @@ int straight_ctx_init (hashcat_ctx_t *hashcat_ctx)
       }
       else
       {
-        const int rc = straight_ctx_add_wl (hashcat_ctx, l0_filename);
-
-        if (rc == -1) return -1;
+        if (straight_ctx_add_wl (hashcat_ctx, l0_filename) == -1) return -1;
       }
     }
 
@@ -425,9 +460,7 @@ int straight_ctx_init (hashcat_ctx_t *hashcat_ctx)
 
             if (hc_path_is_file (l1_filename) == true)
             {
-              const int rc = straight_ctx_add_wl (hashcat_ctx, l1_filename);
-
-              if (rc == -1)
+              if (straight_ctx_add_wl (hashcat_ctx, l1_filename) == -1)
               {
                 hcfree (dictionary_files);
 
@@ -441,9 +474,7 @@ int straight_ctx_init (hashcat_ctx_t *hashcat_ctx)
       }
       else
       {
-        const int rc = straight_ctx_add_wl (hashcat_ctx, l0_filename);
-
-        if (rc == -1) return -1;
+        if (straight_ctx_add_wl (hashcat_ctx, l0_filename) == -1) return -1;
       }
     }
 

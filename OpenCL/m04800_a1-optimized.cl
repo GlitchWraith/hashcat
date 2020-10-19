@@ -5,26 +5,28 @@
 
 #define NEW_SIMD_CODE
 
-#include "inc_vendor.cl"
-#include "inc_hash_constants.h"
-#include "inc_hash_functions.cl"
-#include "inc_types.cl"
+#ifdef KERNEL_STATIC
+#include "inc_vendor.h"
+#include "inc_types.h"
+#include "inc_platform.cl"
 #include "inc_common.cl"
 #include "inc_simd.cl"
-
-#if   VECT_SIZE == 1
-#define uint_to_hex_lower8_le(i) (u32x) (l_bin2asc[(i)])
-#elif VECT_SIZE == 2
-#define uint_to_hex_lower8_le(i) (u32x) (l_bin2asc[(i).s0], l_bin2asc[(i).s1])
-#elif VECT_SIZE == 4
-#define uint_to_hex_lower8_le(i) (u32x) (l_bin2asc[(i).s0], l_bin2asc[(i).s1], l_bin2asc[(i).s2], l_bin2asc[(i).s3])
-#elif VECT_SIZE == 8
-#define uint_to_hex_lower8_le(i) (u32x) (l_bin2asc[(i).s0], l_bin2asc[(i).s1], l_bin2asc[(i).s2], l_bin2asc[(i).s3], l_bin2asc[(i).s4], l_bin2asc[(i).s5], l_bin2asc[(i).s6], l_bin2asc[(i).s7])
-#elif VECT_SIZE == 16
-#define uint_to_hex_lower8_le(i) (u32x) (l_bin2asc[(i).s0], l_bin2asc[(i).s1], l_bin2asc[(i).s2], l_bin2asc[(i).s3], l_bin2asc[(i).s4], l_bin2asc[(i).s5], l_bin2asc[(i).s6], l_bin2asc[(i).s7], l_bin2asc[(i).s8], l_bin2asc[(i).s9], l_bin2asc[(i).sa], l_bin2asc[(i).sb], l_bin2asc[(i).sc], l_bin2asc[(i).sd], l_bin2asc[(i).se], l_bin2asc[(i).sf])
+#include "inc_hash_md5.cl"
 #endif
 
-__kernel void m04800_m04 (KERN_ATTR_BASIC ())
+#if   VECT_SIZE == 1
+#define uint_to_hex_lower8_le(i) make_u32x (l_bin2asc[(i)])
+#elif VECT_SIZE == 2
+#define uint_to_hex_lower8_le(i) make_u32x (l_bin2asc[(i).s0], l_bin2asc[(i).s1])
+#elif VECT_SIZE == 4
+#define uint_to_hex_lower8_le(i) make_u32x (l_bin2asc[(i).s0], l_bin2asc[(i).s1], l_bin2asc[(i).s2], l_bin2asc[(i).s3])
+#elif VECT_SIZE == 8
+#define uint_to_hex_lower8_le(i) make_u32x (l_bin2asc[(i).s0], l_bin2asc[(i).s1], l_bin2asc[(i).s2], l_bin2asc[(i).s3], l_bin2asc[(i).s4], l_bin2asc[(i).s5], l_bin2asc[(i).s6], l_bin2asc[(i).s7])
+#elif VECT_SIZE == 16
+#define uint_to_hex_lower8_le(i) make_u32x (l_bin2asc[(i).s0], l_bin2asc[(i).s1], l_bin2asc[(i).s2], l_bin2asc[(i).s3], l_bin2asc[(i).s4], l_bin2asc[(i).s5], l_bin2asc[(i).s6], l_bin2asc[(i).s7], l_bin2asc[(i).s8], l_bin2asc[(i).s9], l_bin2asc[(i).sa], l_bin2asc[(i).sb], l_bin2asc[(i).sc], l_bin2asc[(i).sd], l_bin2asc[(i).se], l_bin2asc[(i).sf])
+#endif
+
+KERNEL_FQ void m04800_m04 (KERN_ATTR_BASIC ())
 {
   /**
    * modifier
@@ -59,13 +61,13 @@ __kernel void m04800_m04 (KERN_ATTR_BASIC ())
 
   u32 salt_buf[5];
 
-  salt_buf[0] = salt_bufs[salt_pos].salt_buf[0];
-  salt_buf[1] = salt_bufs[salt_pos].salt_buf[1];
-  salt_buf[2] = salt_bufs[salt_pos].salt_buf[2];
-  salt_buf[3] = salt_bufs[salt_pos].salt_buf[3];
-  salt_buf[4] = salt_bufs[salt_pos].salt_buf[4];
+  salt_buf[0] = salt_bufs[SALT_POS].salt_buf[0];
+  salt_buf[1] = salt_bufs[SALT_POS].salt_buf[1];
+  salt_buf[2] = salt_bufs[SALT_POS].salt_buf[2];
+  salt_buf[3] = salt_bufs[SALT_POS].salt_buf[3];
+  salt_buf[4] = salt_bufs[SALT_POS].salt_buf[4];
 
-  const u32 salt_len = salt_bufs[salt_pos].salt_len;
+  const u32 salt_len = salt_bufs[SALT_POS].salt_len;
 
   /**
    * loop
@@ -281,15 +283,15 @@ __kernel void m04800_m04 (KERN_ATTR_BASIC ())
   }
 }
 
-__kernel void m04800_m08 (KERN_ATTR_BASIC ())
+KERNEL_FQ void m04800_m08 (KERN_ATTR_BASIC ())
 {
 }
 
-__kernel void m04800_m16 (KERN_ATTR_BASIC ())
+KERNEL_FQ void m04800_m16 (KERN_ATTR_BASIC ())
 {
 }
 
-__kernel void m04800_s04 (KERN_ATTR_BASIC ())
+KERNEL_FQ void m04800_s04 (KERN_ATTR_BASIC ())
 {
   /**
    * modifier
@@ -324,13 +326,13 @@ __kernel void m04800_s04 (KERN_ATTR_BASIC ())
 
   u32 salt_buf[5];
 
-  salt_buf[0] = salt_bufs[salt_pos].salt_buf[0];
-  salt_buf[1] = salt_bufs[salt_pos].salt_buf[1];
-  salt_buf[2] = salt_bufs[salt_pos].salt_buf[2];
-  salt_buf[3] = salt_bufs[salt_pos].salt_buf[3];
-  salt_buf[4] = salt_bufs[salt_pos].salt_buf[4];
+  salt_buf[0] = salt_bufs[SALT_POS].salt_buf[0];
+  salt_buf[1] = salt_bufs[SALT_POS].salt_buf[1];
+  salt_buf[2] = salt_bufs[SALT_POS].salt_buf[2];
+  salt_buf[3] = salt_bufs[SALT_POS].salt_buf[3];
+  salt_buf[4] = salt_bufs[SALT_POS].salt_buf[4];
 
-  const u32 salt_len = salt_bufs[salt_pos].salt_len;
+  const u32 salt_len = salt_bufs[SALT_POS].salt_len;
 
   /**
    * digest
@@ -338,10 +340,10 @@ __kernel void m04800_s04 (KERN_ATTR_BASIC ())
 
   const u32 search[4] =
   {
-    digests_buf[digests_offset].digest_buf[DGST_R0],
-    digests_buf[digests_offset].digest_buf[DGST_R1],
-    digests_buf[digests_offset].digest_buf[DGST_R2],
-    digests_buf[digests_offset].digest_buf[DGST_R3]
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R0],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R1],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R2],
+    digests_buf[DIGESTS_OFFSET].digest_buf[DGST_R3]
   };
 
   /**
@@ -561,10 +563,10 @@ __kernel void m04800_s04 (KERN_ATTR_BASIC ())
   }
 }
 
-__kernel void m04800_s08 (KERN_ATTR_BASIC ())
+KERNEL_FQ void m04800_s08 (KERN_ATTR_BASIC ())
 {
 }
 
-__kernel void m04800_s16 (KERN_ATTR_BASIC ())
+KERNEL_FQ void m04800_s16 (KERN_ATTR_BASIC ())
 {
 }

@@ -5,17 +5,28 @@
 
 #define NEW_SIMD_CODE
 
-#include "inc_vendor.cl"
-#include "inc_hash_constants.h"
-#include "inc_hash_functions.cl"
-#include "inc_types.cl"
+#ifdef KERNEL_STATIC
+#include "inc_vendor.h"
+#include "inc_types.h"
+#include "inc_platform.cl"
 #include "inc_common.cl"
 #include "inc_simd.cl"
 #include "inc_hash_sha256.cl"
 #include "inc_cipher_aes.cl"
+#endif
 
 #define COMPARE_S "inc_comp_single.cl"
 #define COMPARE_M "inc_comp_multi.cl"
+
+typedef struct lastpass_tmp
+{
+  u32 ipad[8];
+  u32 opad[8];
+
+  u32 dgst[8];
+  u32 out[8];
+
+} lastpass_tmp_t;
 
 DECLSPEC void hmac_sha256_run_V (u32x *w0, u32x *w1, u32x *w2, u32x *w3, u32x *ipad, u32x *opad, u32x *digest)
 {
@@ -59,7 +70,7 @@ DECLSPEC void hmac_sha256_run_V (u32x *w0, u32x *w1, u32x *w2, u32x *w3, u32x *i
   sha256_transform_vector (w0, w1, w2, w3, digest);
 }
 
-__kernel void m06800_init (KERN_ATTR_TMPS (lastpass_tmp_t))
+KERNEL_FQ void m06800_init (KERN_ATTR_TMPS (lastpass_tmp_t))
 {
   /**
    * base
@@ -71,7 +82,7 @@ __kernel void m06800_init (KERN_ATTR_TMPS (lastpass_tmp_t))
 
   sha256_hmac_ctx_t sha256_hmac_ctx;
 
-  sha256_hmac_init_global_swap (&sha256_hmac_ctx, pws[gid].i, pws[gid].pw_len & 255);
+  sha256_hmac_init_global_swap (&sha256_hmac_ctx, pws[gid].i, pws[gid].pw_len);
 
   tmps[gid].ipad[0] = sha256_hmac_ctx.ipad.h[0];
   tmps[gid].ipad[1] = sha256_hmac_ctx.ipad.h[1];
@@ -91,7 +102,7 @@ __kernel void m06800_init (KERN_ATTR_TMPS (lastpass_tmp_t))
   tmps[gid].opad[6] = sha256_hmac_ctx.opad.h[6];
   tmps[gid].opad[7] = sha256_hmac_ctx.opad.h[7];
 
-  sha256_hmac_update_global_swap (&sha256_hmac_ctx, salt_bufs[salt_pos].salt_buf, salt_bufs[salt_pos].salt_len);
+  sha256_hmac_update_global_swap (&sha256_hmac_ctx, salt_bufs[SALT_POS].salt_buf, salt_bufs[SALT_POS].salt_len);
 
   for (u32 i = 0, j = 1; i < 8; i += 8, j += 1)
   {
@@ -143,7 +154,7 @@ __kernel void m06800_init (KERN_ATTR_TMPS (lastpass_tmp_t))
   }
 }
 
-__kernel void m06800_loop (KERN_ATTR_TMPS (lastpass_tmp_t))
+KERNEL_FQ void m06800_loop (KERN_ATTR_TMPS (lastpass_tmp_t))
 {
   const u64 gid = get_global_id (0);
 
@@ -249,7 +260,7 @@ __kernel void m06800_loop (KERN_ATTR_TMPS (lastpass_tmp_t))
   }
 }
 
-__kernel void m06800_comp (KERN_ATTR_TMPS (lastpass_tmp_t))
+KERNEL_FQ void m06800_comp (KERN_ATTR_TMPS (lastpass_tmp_t))
 {
   const u64 gid = get_global_id (0);
   const u64 lid = get_local_id (0);
@@ -261,19 +272,19 @@ __kernel void m06800_comp (KERN_ATTR_TMPS (lastpass_tmp_t))
 
   #ifdef REAL_SHM
 
-  __local u32 s_td0[256];
-  __local u32 s_td1[256];
-  __local u32 s_td2[256];
-  __local u32 s_td3[256];
-  __local u32 s_td4[256];
+  LOCAL_VK u32 s_td0[256];
+  LOCAL_VK u32 s_td1[256];
+  LOCAL_VK u32 s_td2[256];
+  LOCAL_VK u32 s_td3[256];
+  LOCAL_VK u32 s_td4[256];
 
-  __local u32 s_te0[256];
-  __local u32 s_te1[256];
-  __local u32 s_te2[256];
-  __local u32 s_te3[256];
-  __local u32 s_te4[256];
+  LOCAL_VK u32 s_te0[256];
+  LOCAL_VK u32 s_te1[256];
+  LOCAL_VK u32 s_te2[256];
+  LOCAL_VK u32 s_te3[256];
+  LOCAL_VK u32 s_te4[256];
 
-  for (MAYBE_VOLATILE u32 i = lid; i < 256; i += lsz)
+  for (u32 i = lid; i < 256; i += lsz)
   {
     s_td0[i] = td0[i];
     s_td1[i] = td1[i];
@@ -288,21 +299,21 @@ __kernel void m06800_comp (KERN_ATTR_TMPS (lastpass_tmp_t))
     s_te4[i] = te4[i];
   }
 
-  barrier (CLK_LOCAL_MEM_FENCE);
+  SYNC_THREADS ();
 
   #else
 
-  __constant u32a *s_td0 = td0;
-  __constant u32a *s_td1 = td1;
-  __constant u32a *s_td2 = td2;
-  __constant u32a *s_td3 = td3;
-  __constant u32a *s_td4 = td4;
+  CONSTANT_AS u32a *s_td0 = td0;
+  CONSTANT_AS u32a *s_td1 = td1;
+  CONSTANT_AS u32a *s_td2 = td2;
+  CONSTANT_AS u32a *s_td3 = td3;
+  CONSTANT_AS u32a *s_td4 = td4;
 
-  __constant u32a *s_te0 = te0;
-  __constant u32a *s_te1 = te1;
-  __constant u32a *s_te2 = te2;
-  __constant u32a *s_te3 = te3;
-  __constant u32a *s_te4 = te4;
+  CONSTANT_AS u32a *s_te0 = te0;
+  CONSTANT_AS u32a *s_te1 = te1;
+  CONSTANT_AS u32a *s_te2 = te2;
+  CONSTANT_AS u32a *s_te3 = te3;
+  CONSTANT_AS u32a *s_te4 = te4;
 
   #endif
 
@@ -326,35 +337,35 @@ __kernel void m06800_comp (KERN_ATTR_TMPS (lastpass_tmp_t))
   {
     const u32 data[4] =
     {
-      digests_buf[digests_offset].digest_buf[0],
-      digests_buf[digests_offset].digest_buf[1],
-      digests_buf[digests_offset].digest_buf[2],
-      digests_buf[digests_offset].digest_buf[3],
+      digests_buf[DIGESTS_OFFSET].digest_buf[0],
+      digests_buf[DIGESTS_OFFSET].digest_buf[1],
+      digests_buf[DIGESTS_OFFSET].digest_buf[2],
+      digests_buf[DIGESTS_OFFSET].digest_buf[3],
     };
 
     #define KEYLEN 60
 
     u32 ks[KEYLEN];
 
-    AES256_set_decrypt_key (ks, ukey, s_te0, s_te1, s_te2, s_te3, s_te4, s_td0, s_td1, s_td2, s_td3, s_td4);
+    AES256_set_decrypt_key (ks, ukey, s_te0, s_te1, s_te2, s_te3, s_td0, s_td1, s_td2, s_td3);
 
     u32 out[4];
 
     AES256_decrypt (ks, data, out, s_td0, s_td1, s_td2, s_td3, s_td4);
 
-    u32 salt_len = salt_bufs[salt_pos].salt_len;
+    u32 salt_len = salt_bufs[SALT_POS].salt_len;
 
     u32 salt_buf[4];
 
-    salt_buf[0] = salt_bufs[salt_pos].salt_buf[0];
-    salt_buf[1] = salt_bufs[salt_pos].salt_buf[1];
-    salt_buf[2] = salt_bufs[salt_pos].salt_buf[2];
-    salt_buf[3] = salt_bufs[salt_pos].salt_buf[3];
+    salt_buf[0] = salt_bufs[SALT_POS].salt_buf[0];
+    salt_buf[1] = salt_bufs[SALT_POS].salt_buf[1];
+    salt_buf[2] = salt_bufs[SALT_POS].salt_buf[2];
+    salt_buf[3] = salt_bufs[SALT_POS].salt_buf[3];
 
-    out[0] = swap32_S (out[0]);
-    out[1] = swap32_S (out[1]);
-    out[2] = swap32_S (out[2]);
-    out[3] = swap32_S (out[3]);
+    out[0] = hc_swap32_S (out[0]);
+    out[1] = hc_swap32_S (out[1]);
+    out[2] = hc_swap32_S (out[2]);
+    out[3] = hc_swap32_S (out[3]);
 
     truncate_block_4x4_le_S (out, salt_len);
 
@@ -363,9 +374,9 @@ __kernel void m06800_comp (KERN_ATTR_TMPS (lastpass_tmp_t))
      && (out[2] == salt_buf[2])
      && (out[3] == salt_buf[3]))
     {
-      if (atomic_inc (&hashes_shown[digests_offset]) == 0)
+      if (atomic_inc (&hashes_shown[DIGESTS_OFFSET]) == 0)
       {
-        mark_hash (plains_buf, d_return_buf, salt_pos, digests_cnt, 0, digests_offset + 0, gid, 0);
+        mark_hash (plains_buf, d_return_buf, SALT_POS, digests_cnt, 0, DIGESTS_OFFSET + 0, gid, 0, 0, 0);
       }
     }
   }
@@ -387,7 +398,7 @@ __kernel void m06800_comp (KERN_ATTR_TMPS (lastpass_tmp_t))
 
     u32 ks[KEYLEN];
 
-    AES256_set_encrypt_key (ks, ukey, s_te0, s_te1, s_te2, s_te3, s_te4);
+    AES256_set_encrypt_key (ks, ukey, s_te0, s_te1, s_te2, s_te3);
 
     u32 out[4];
 
@@ -400,6 +411,8 @@ __kernel void m06800_comp (KERN_ATTR_TMPS (lastpass_tmp_t))
 
     #define il_pos 0
 
+    #ifdef KERNEL_STATIC
     #include COMPARE_M
+    #endif
   }
 }
